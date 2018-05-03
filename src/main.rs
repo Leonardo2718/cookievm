@@ -34,15 +34,34 @@ fn main() {
     use cookie_base::*;
     use cookie_base::Instruction::*;
     use interpreter::*;
-    let mut instructions: InstructionList = vec![
+    let instructions: InstructionList = vec![
         PUSHC(Value::I32(1)),
-        PRINTS(Type::I32),
+        PRINTS,
         PUSHC(Value::I32(2)),
-        PRINTS(Type::I32),
+        PRINTS,
         PUSHC(Value::I32(3)),
-        PRINTS(Type::I32),
+        PRINTS,
+        PUSHC(Value::Char('\n')),
+        PRINTS,
+        PUSHC(Value::Char('a')),
+        PRINTS,
+        PUSHC(Value::Char('b')),
+        PRINTS,
+        PUSHC(Value::Char('c')),
+        PRINTS,
+        PUSHC(Value::Char('\n')),
+        PRINTS,
+        PUSHC(Value::IPtr(0x15a)),
+        PRINTS,
+        PUSHC(Value::Char('\n')),
+        PRINTS,
+        PUSHC(Value::SPtr(0xa5f)),
+        PRINTS,
+        PUSHC(Value::Char('\n')),
+        PRINTS,
     ];
-    match exec(&instructions) {
+    let mut thread = Thread::new(&instructions);
+    match thread.exec() {
         Ok(_) => {},
         Err(msg) => println!("{}", msg)
     }
