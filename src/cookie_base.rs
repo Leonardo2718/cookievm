@@ -26,7 +26,7 @@ License:
 use std::fmt;
 use std::result;
 
-type Result<T> = result::Result<T, String>;
+pub type Result<T> = result::Result<T, String>;
 
 // cookie data types ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

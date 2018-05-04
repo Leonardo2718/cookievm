@@ -92,6 +92,7 @@ impl<'a> Thread<'a> {
                 self.stack.push(res);
                 self.pc + 1
             },
+            JUMP(label) => *self.get_label(label)?,
             PRINTS => {
                 self.do_print()?;
                 self.pc + 1
@@ -144,6 +145,10 @@ impl<'a> Thread<'a> {
 
     fn pop(&mut self) -> Result<cookie::Value, String> {
         self.stack.pop().ok_or("Cannot pop value from stack: stack is empty.".to_string())
+    }
+
+    fn get_label(&self, label: &str) -> cookie::Result<&usize> {
+        self.label_table.get(label).ok_or(format!("No label with name {}", label)).clone()
     }
 }
 
@@ -458,6 +463,30 @@ mod test {
         let insts = vec![
             PUSHC(Value::SPtr(0x2)),
             POPR(RegisterName::ProgramCounter),
+        ];
+        let mut thread = Thread::new(&insts, HashMap::new());
+        assert!(thread.exec().is_err());
+    }
+
+    #[test]
+    fn jump_test_1() {
+        let insts = vec![
+            PUSHC(Value::I32(1)),
+            JUMP("label".to_string()),
+            POP,
+            PUSHC(Value::I32(2)),
+            STACK_UNARY(UOp::NEG),
+        ];
+        let mut labels: LabelTable = HashMap::new();
+        labels.insert("label".to_string(), 4);
+        let mut thread = Thread::new(&insts, labels);
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
+    }
+
+    #[test]
+    fn jump_test_2() {
+        let insts = vec![
+            JUMP("label".to_string()),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
