@@ -63,8 +63,12 @@ impl<'a> Thread<'a> {
             STACK_BINARY(op) => {
                 let rhs = self.pop()?;
                 let lhs = self.pop()?;
-                op.apply(lhs, rhs);
+                op.apply_to(lhs, rhs);
             },
+            STACK_UNARY(op) => {
+                let val = self.pop()?;
+                op.apply_to(val);
+            }
             PRINTS => self.do_print()?,
             _ => panic!("Unimplemented instruction: {:?}", inst)
         };
@@ -106,10 +110,6 @@ impl<'a> Thread<'a> {
         }
         return Ok(());
     }
-
-    // fn do_stack_op(&mut self, op: &cookie::Operation, t: &cookie::Type) -> Result<(), String> {
-
-    // }
 
     fn do_print(&mut self) -> Result<(), String> {
         let v = self.pop()?;
