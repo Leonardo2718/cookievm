@@ -144,14 +144,6 @@ pub enum BinaryOperation {
     EQ, LT, LE, GT, GE,
 }
 
-fn map_i32<F>(lhs: Value, rhs: Value, f: F) -> impl Fn(String) -> Result<Value>
-where F: Fn(i32, i32) -> Value {
-    move |err| match (&lhs, &rhs) {
-        (Value::I32(l), Value::I32(r)) => Ok(f(l.clone(), r.clone())),
-        _ => Err(err)
-    }
-}
-
 impl BinaryOperation {
     pub fn apply(&self, lhs: Value, rhs: Value) -> Result<Value> {
         let apply_err = Err(format!("Cannot apply {} operation to {} and {}", self, lhs, rhs));
@@ -197,20 +189,26 @@ impl BinaryOperation {
             BinaryOperation::EQ => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, ==))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, ==))
+                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, ==))
+                .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, ==))
                 .or_else(apply_binary!(IPtr, lhs, IPtr, rhs, Bool, ==))
                 .or_else(apply_binary!(SPtr, lhs, SPtr, rhs, Bool, ==)),
             BinaryOperation::LT => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, <))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, <)),
+                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, <))
+                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, <)),
             BinaryOperation::LE => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, <=))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, <=)),
+                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, <=))
+                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, <=)),
             BinaryOperation::GT => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, >))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, >)),
+                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, >))
+                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, >)),
             BinaryOperation::GE => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, >=))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, >=)),
+                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, >=))
+                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, >=)),
 
             BinaryOperation::AND => apply_err
                 .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, &&))
@@ -242,19 +240,20 @@ impl UnaryOperation {
             UnaryOperation::NOT => apply_err
                 .or_else(apply_unary!(Bool, val, Bool, !))
                 .or_else(apply_unary!(I32, val, I32, !)),
+            _ => apply_err
         }
     }
 }
 
 impl fmt::Display for BinaryOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{:?}", self)
     }
 }
 
 impl fmt::Display for UnaryOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{:?}", self)
     }
 }
 
@@ -280,4 +279,1024 @@ pub enum Instruction {
     READS(Type),
 
     HALT,
+}
+
+// tests ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use super::UnaryOperation::*;
+    use super::BinaryOperation::*;
+
+    #[test]
+    fn apply_unary_test_1() {
+        let val = Value::I32(1);
+        assert_eq!(apply_unary!(I32, val, I32, -)("".to_string()).unwrap(), Value::I32(-1));
+    }
+
+    #[test]
+    fn apply_unary_test_2() {
+        let val = Value::F32(3.14159);
+        assert_eq!(apply_unary!(F32, val, F32, -)("".to_string()).unwrap(), Value::F32(-3.14159));
+    }
+
+    #[test]
+    fn apply_unary_test_3() {
+        let val = Value::Bool(false);
+        assert_eq!(apply_unary!(Bool, val, Bool, !)("".to_string()).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn apply_unary_test_5() {
+        let val = Value::Char('c');
+        assert!(apply_unary!(I32, val, I32, -)("".to_string()).is_err());
+    }
+
+    #[test]
+    fn apply_unary_test_6() {
+        let val = Value::I32(1);
+        assert!(apply_unary!(Bool, val, Bool, !)("".to_string()).is_err());
+    }
+
+    #[test]
+    fn apply_unary_test_7() {
+        let val = Value::I32(3);
+        assert!(apply_unary!(F32, val, F32, -)("".to_string()).is_err());
+    }
+
+    #[test]
+    fn apply_binary_test_1() {
+        let lhs = Value::I32(1);
+        let rhs = Value::I32(2);
+        assert_eq!(apply_binary!(I32, lhs, I32, rhs, I32, +)("".to_string()).unwrap(), Value::I32(3));
+    }
+
+    #[test]
+    fn apply_binary_test_2() {
+        let lhs_val = 3.14159;
+        let rhs_val = 2.71828;
+        let lhs = Value::F32(lhs_val);
+        let rhs = Value::F32(rhs_val);
+        assert_eq!(apply_binary!(F32, lhs, F32, rhs, F32, -)("".to_string()).unwrap(), Value::F32(lhs_val - rhs_val));
+    }
+
+    #[test]
+    fn apply_binary_test_3() {
+        let lhs = Value::Char('a');
+        let rhs = Value::Char('b');
+        assert_eq!(apply_binary!(Char, lhs, Char, rhs, Bool, <)("".to_string()).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn apply_binary_test_4() {
+        let lhs = Value::I32(2);
+        let rhs = Value::I32(4);
+        assert_eq!(apply_binary!(I32, lhs, I32, rhs, I32, |)("".to_string()).unwrap(), Value::I32(6));
+    }
+
+    #[test]
+    fn apply_binary_test_5() {
+        let lhs = Value::F32(3.14);
+        let rhs = Value::F32(3.14);
+        assert_eq!(apply_binary!(F32, lhs, F32, rhs, Bool, ==)("".to_string()).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn apply_binary_test_6() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(4);
+        assert!(apply_binary!(F32, lhs, F32, rhs, F32, +)("".to_string()).is_err());
+    }
+
+    #[test]
+    fn apply_binary_test_7() {
+        let lhs = Value::Bool(true);
+        let rhs = Value::Bool(false);
+        assert!(apply_binary!(I32, lhs, I32, rhs, I32, &)("".to_string()).is_err());
+    }
+
+    #[test]
+    fn neg_test_1() {
+        let val = Value::I32(3);
+        assert_eq!(NEG.apply(val).unwrap(), Value::I32(-3));
+    }
+
+    #[test]
+    fn neg_test_2() {
+        let val = Value::F32(-2.71828);
+        assert_eq!(NEG.apply(val).unwrap(), Value::F32(2.71828));
+    }
+
+    #[test]
+    fn neg_test_3() {
+        let val = Value::Char('x');
+        assert!(NEG.apply(val).is_err());
+    }
+
+    #[test]
+    fn neg_test_4() {
+        let val = Value::Bool(true);
+        assert!(NEG.apply(val).is_err());
+    }
+
+    #[test]
+    fn neg_test_5() {
+        let val = Value::IPtr(0x1);
+        assert!(NEG.apply(val).is_err());
+    }
+
+    #[test]
+    fn neg_test_6() {
+        let val = Value::SPtr(0x1);
+        assert!(NEG.apply(val).is_err());
+    }
+
+    #[test]
+    fn neg_test_7() {
+        let val = Value::Void;
+        assert!(NEG.apply(val).is_err());
+    }
+
+    #[test]
+    fn not_test_1() {
+        let val = Value::Bool(true);
+        assert_eq!(NOT.apply(val).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn not_test_2() {
+        let val = Value::I32(0xf0f0f0f0);
+        assert_eq!(NOT.apply(val).unwrap(), Value::I32(0x0f0f0f0f));
+    }
+
+    #[test]
+    fn not_test_3() {
+        let val = Value::F32(3.14159);
+        assert!(NOT.apply(val).is_err());
+    }
+
+    #[test]
+    fn not_test_4() {
+        let val = Value::Char('z');
+        assert!(NOT.apply(val).is_err());
+    }
+
+    #[test]
+    fn not_test_5() {
+        let val = Value::IPtr(0xabcd);
+        assert!(NOT.apply(val).is_err());
+    }
+
+    #[test]
+    fn not_test_6() {
+        let val = Value::SPtr(0xfedc);
+        assert!(NOT.apply(val).is_err());
+    }
+
+    #[test]
+    fn not_test_7() {
+        let val = Value::Void;
+        assert!(NOT.apply(val).is_err());
+    }
+
+    #[test]
+    fn add_test_1() {
+        let lhs = Value::I32(1);
+        let rhs = Value::I32(2);
+        assert_eq!(ADD.apply(lhs, rhs).unwrap(), Value::I32(3));
+    }
+
+    #[test]
+    fn add_test_2() {
+        let lhs = Value::F32(1.23);
+        let rhs = Value::F32(4.56);
+        assert_eq!(ADD.apply(lhs, rhs).unwrap(), Value::F32(5.79))
+    }
+
+    #[test]
+    fn add_test_3() {
+        let lhs = Value::IPtr(0x8);
+        let rhs = Value::I32(4);
+        assert_eq!(ADD.apply(lhs, rhs).unwrap(), Value::IPtr(0xc));
+    }
+
+    #[test]
+    fn add_test_4() {
+        let lhs = Value::SPtr(0x8);
+        let rhs = Value::I32(4);
+        assert_eq!(ADD.apply(lhs, rhs).unwrap(), Value::SPtr(0xc));
+    }
+
+    #[test]
+    fn add_test_5() {
+        let lhs = Value::I32(2);
+        let rhs = Value::F32(3.0);
+        assert!(ADD.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn add_test_6() {
+        let lhs = Value::Char('c');
+        let rhs = Value::I32(4);
+        assert!(ADD.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn add_test_7() {
+        let lhs = Value::I32(3);
+        let rhs = Value::Bool(true);
+        assert!(ADD.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn add_test_8() {
+        let lhs = Value::Void;
+        let rhs = Value::I32(1);
+        assert!(ADD.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn sub_test_1() {
+        let lhs = Value::I32(4);
+        let rhs = Value::I32(6);
+        assert_eq!(SUB.apply(lhs, rhs).unwrap(), Value::I32(-2));
+    }
+
+    #[test]
+    fn sub_test_2() {
+        let lhs_val = 3.14159;
+        let rhs_val = 2.71828;
+        let lhs = Value::F32(lhs_val);
+        let rhs = Value::F32(rhs_val);
+        assert_eq!(SUB.apply(lhs, rhs).unwrap(), Value::F32(lhs_val - rhs_val));
+    }
+
+    #[test]
+    fn sub_test_3() {
+        let lhs = Value::IPtr(0x8);
+        let rhs = Value::I32(2);
+        assert_eq!(SUB.apply(lhs, rhs).unwrap(), Value::IPtr(0x6));
+    }
+
+    #[test]
+    fn sub_test_4() {
+        let lhs = Value::SPtr(0x8);
+        let rhs = Value::I32(3);
+        assert_eq!(SUB.apply(lhs, rhs).unwrap(), Value::SPtr(0x5));
+    }
+
+    #[test]
+    fn sub_test_5() {
+        let lhs = Value::I32(2);
+        let rhs = Value::F32(3.0);
+        assert!(SUB.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn sub_test_6() {
+        let lhs = Value::Char('e');
+        let rhs = Value::I32(4);
+        assert!(SUB.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn sub_test_7() {
+        let lhs = Value::I32(3);
+        let rhs = Value::Bool(true);
+        assert!(SUB.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn sub_test_8() {
+        let lhs = Value::Void;
+        let rhs = Value::I32(1);
+        assert!(SUB.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn mul_test_1() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(4);
+        assert_eq!(MUL.apply(lhs,rhs).unwrap(), Value::I32(12));
+    }
+
+    #[test]
+    fn mul_test_2() {
+        let lhs = Value::F32(0.2);
+        let rhs = Value::F32(10.0);
+        assert_eq!(MUL.apply(lhs,rhs).unwrap(), Value::F32(2.0));
+    }
+
+    #[test]
+    fn mul_test_3() {
+        let lhs = Value::F32(2.0);
+        let rhs = Value::I32(3);
+        assert!(MUL.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn mul_test_4() {
+        let lhs = Value::Char('e');
+        let rhs = Value::I32(1);
+        assert!(MUL.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn mul_test_5() {
+        let lhs = Value::F32(1.0);
+        let rhs = Value::Bool(true);
+        assert!(MUL.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn mul_test_6() {
+        let lhs = Value::I32(2);
+        let rhs = Value::Void;
+        assert!(MUL.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn div_test_1() {
+        let lhs = Value::I32(6);
+        let rhs = Value::I32(3);
+        assert_eq!(DIV.apply(lhs,rhs).unwrap(), Value::I32(2));
+    }
+
+    #[test]
+    fn div_test_2() {
+        let lhs = Value::F32(4.68);
+        let rhs = Value::F32(2.0);
+        assert_eq!(DIV.apply(lhs,rhs).unwrap(), Value::F32(2.34));
+    }
+
+    #[test]
+    fn div_test_3() {
+        let lhs = Value::F32(2.0);
+        let rhs = Value::I32(10);
+        assert!(DIV.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn div_test_4() {
+        let lhs = Value::Char('f');
+        let rhs = Value::I32(2);
+        assert!(DIV.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn div_test_5() {
+        let lhs = Value::F32(3.0);
+        let rhs = Value::Bool(true);
+        assert!(DIV.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn div_test_6() {
+        let lhs = Value::I32(5);
+        let rhs = Value::Void;
+        assert!(DIV.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn mod_test_1() {
+        let lhs = Value::I32(5);
+        let rhs = Value::I32(3);
+        assert_eq!(MOD.apply(lhs,rhs).unwrap(), Value::I32(2));
+    }
+
+    #[test]
+    fn mod_test_2() {
+        let lhs_val = 4.68;
+        let rhs_val = 1.5;
+        let lhs = Value::F32(lhs_val);
+        let rhs = Value::F32(rhs_val);
+        assert_eq!(MOD.apply(lhs,rhs).unwrap(), Value::F32(lhs_val % rhs_val));
+    }
+
+    #[test]
+    fn mod_test_3() {
+        let lhs = Value::F32(2.0);
+        let rhs = Value::I32(10);
+        assert!(MOD.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn mod_test_4() {
+        let lhs = Value::Char('f');
+        let rhs = Value::I32(2);
+        assert!(MOD.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn mod_test_5() {
+        let lhs = Value::F32(3.0);
+        let rhs = Value::Bool(true);
+        assert!(MOD.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn mod_test_6() {
+        let lhs = Value::I32(5);
+        let rhs = Value::Void;
+        assert!(MOD.apply(lhs,rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_1() {
+        let lhs = Value::I32(4);
+        let rhs = Value::I32(4);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn eq_test_2() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(2);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn eq_test_3() {
+        let lhs = Value::F32(6.47);
+        let rhs = Value::F32(6.47);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn eq_test_4() {
+        let lhs = Value::F32(3.14159);
+        let rhs = Value::F32(2.71828);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn eq_test_5() {
+        let lhs = Value::Char('c');
+        let rhs = Value::Char('c');
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn eq_test_6() {
+        let lhs = Value::Char('x');
+        let rhs = Value::Char('y');
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn eq_test_7() {
+        let lhs = Value::Bool(false);
+        let rhs = Value::Bool(false);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn eq_test_8() {
+        let lhs = Value::Bool(false);
+        let rhs = Value::Bool(true);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn eq_test_9() {
+        let lhs = Value::IPtr(0x5);
+        let rhs = Value::IPtr(0x5);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn eq_test_10() {
+        let lhs = Value::IPtr(0x7);
+        let rhs = Value::IPtr(0x4);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn eq_test_11() {
+        let lhs = Value::SPtr(0x5);
+        let rhs = Value::SPtr(0x5);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn eq_test_12() {
+        let lhs = Value::SPtr(0x7);
+        let rhs = Value::SPtr(0x4);
+        assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn eq_test_13() {
+        let lhs = Value::I32(2);
+        let rhs = Value::F32(2.0);
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_14() {
+        let lhs = Value::Char('c');
+        let rhs = Value::I32(3);
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_15() {
+        let lhs = Value::I32(1);
+        let rhs = Value::Bool(true);
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_16() {
+        let lhs = Value::IPtr(0xff);
+        let rhs = Value::SPtr(0xff);
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_17() {
+        let lhs = Value::IPtr(0x3);
+        let rhs = Value::I32(3);
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_18() {
+        let lhs = Value::I32(5);
+        let rhs = Value::SPtr(0x5);
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_19() {
+        let lhs = Value::Void;
+        let rhs = Value::I32(0);
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_20() {
+        let lhs = Value::Char('e');
+        let rhs = Value::Void;
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn eq_test_21() {
+        let lhs = Value::Void;
+        let rhs = Value::Void;
+        // assert_eq!(EQ.apply(lhs, rhs).unwrap(), Value::Bool(true));
+        assert!(EQ.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn lt_test_1() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(4);
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn lt_test_2() {
+        let lhs = Value::I32(4);
+        let rhs = Value::I32(3);
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn lt_test_3() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(3);
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn lt_test_4() {
+        let lhs = Value::F32(3.5);
+        let rhs = Value::F32(4.1);
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn lt_test_5() {
+        let lhs = Value::F32(4.1);
+        let rhs = Value::F32(3.5);
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn lt_test_6() {
+        let lhs = Value::F32(3.5);
+        let rhs = Value::F32(3.5);
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn lt_test_7() {
+        let lhs = Value::Char('d');
+        let rhs = Value::Char('e');
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn lt_test_8() {
+        let lhs = Value::Char('e');
+        let rhs = Value::Char('d');
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn lt_test_9() {
+        let lhs = Value::Char('d');
+        let rhs = Value::Char('d');
+        assert_eq!(LT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn lt_test_10() {
+        let lhs = Value::Char('a');
+        let rhs = Value::I32(1);
+        assert!(LT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn lt_test_11() {
+        let lhs = Value::F32(2.0);
+        let rhs = Value::I32(1);
+        assert!(LT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn lt_test_12() {
+        let lhs = Value::I32(3);
+        let rhs = Value::Bool(false);
+        assert!(LT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn lt_test_13() {
+        let lhs = Value::Void;
+        let rhs = Value::I32(1);
+        assert!(LT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn lt_test_14() {
+        let lhs = Value::SPtr(0x2);
+        let rhs = Value::I32(1);
+        assert!(LT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn lt_test_15() {
+        let lhs = Value::I32(6);
+        let rhs = Value::IPtr(0x1);
+        assert!(LT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn lt_test_16() {
+        let lhs = Value::Void;
+        let rhs = Value::Void;
+        assert!(LT.apply(lhs, rhs).is_err());
+    }
+
+
+    #[test]
+    fn le_test_1() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(4);
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn le_test_2() {
+        let lhs = Value::I32(4);
+        let rhs = Value::I32(3);
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn le_test_3() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(3);
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn le_test_4() {
+        let lhs = Value::F32(3.5);
+        let rhs = Value::F32(4.1);
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn le_test_5() {
+        let lhs = Value::F32(4.1);
+        let rhs = Value::F32(3.5);
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn le_test_6() {
+        let lhs = Value::F32(3.5);
+        let rhs = Value::F32(3.5);
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn le_test_7() {
+        let lhs = Value::Char('d');
+        let rhs = Value::Char('e');
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn le_test_8() {
+        let lhs = Value::Char('e');
+        let rhs = Value::Char('d');
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn le_test_9() {
+        let lhs = Value::Char('d');
+        let rhs = Value::Char('d');
+        assert_eq!(LE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn le_test_10() {
+        let lhs = Value::Char('a');
+        let rhs = Value::I32(1);
+        assert!(LE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn le_test_11() {
+        let lhs = Value::F32(2.0);
+        let rhs = Value::I32(1);
+        assert!(LE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn le_test_12() {
+        let lhs = Value::I32(3);
+        let rhs = Value::Bool(false);
+        assert!(LE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn le_test_13() {
+        let lhs = Value::Void;
+        let rhs = Value::I32(1);
+        assert!(LE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn le_test_14() {
+        let lhs = Value::SPtr(0x2);
+        let rhs = Value::I32(1);
+        assert!(LE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn le_test_15() {
+        let lhs = Value::I32(6);
+        let rhs = Value::IPtr(0x1);
+        assert!(LE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn le_test_16() {
+        let lhs = Value::Void;
+        let rhs = Value::Void;
+        assert!(LE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn gt_test_1() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(4);
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn gt_test_2() {
+        let lhs = Value::I32(4);
+        let rhs = Value::I32(3);
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn gt_test_3() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(3);
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn gt_test_4() {
+        let lhs = Value::F32(3.5);
+        let rhs = Value::F32(4.1);
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn gt_test_5() {
+        let lhs = Value::F32(4.1);
+        let rhs = Value::F32(3.5);
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn gt_test_6() {
+        let lhs = Value::F32(3.5);
+        let rhs = Value::F32(3.5);
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn gt_test_7() {
+        let lhs = Value::Char('d');
+        let rhs = Value::Char('e');
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn gt_test_8() {
+        let lhs = Value::Char('e');
+        let rhs = Value::Char('d');
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn gt_test_9() {
+        let lhs = Value::Char('d');
+        let rhs = Value::Char('d');
+        assert_eq!(GT.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn gt_test_10() {
+        let lhs = Value::Char('a');
+        let rhs = Value::I32(1);
+        assert!(GT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn gt_test_11() {
+        let lhs = Value::F32(2.0);
+        let rhs = Value::I32(1);
+        assert!(GT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn gt_test_12() {
+        let lhs = Value::I32(3);
+        let rhs = Value::Bool(false);
+        assert!(GT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn gt_test_13() {
+        let lhs = Value::Void;
+        let rhs = Value::I32(1);
+        assert!(GT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn gt_test_14() {
+        let lhs = Value::SPtr(0x2);
+        let rhs = Value::I32(1);
+        assert!(GT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn gt_test_15() {
+        let lhs = Value::I32(6);
+        let rhs = Value::IPtr(0x1);
+        assert!(GT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn gt_test_16() {
+        let lhs = Value::Void;
+        let rhs = Value::Void;
+        assert!(GT.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn ge_test_1() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(4);
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn ge_test_2() {
+        let lhs = Value::I32(4);
+        let rhs = Value::I32(3);
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn ge_test_3() {
+        let lhs = Value::I32(3);
+        let rhs = Value::I32(3);
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn ge_test_4() {
+        let lhs = Value::F32(3.5);
+        let rhs = Value::F32(4.1);
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn ge_test_5() {
+        let lhs = Value::F32(4.1);
+        let rhs = Value::F32(3.5);
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn ge_test_6() {
+        let lhs = Value::F32(3.5);
+        let rhs = Value::F32(3.5);
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn ge_test_7() {
+        let lhs = Value::Char('d');
+        let rhs = Value::Char('e');
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn ge_test_8() {
+        let lhs = Value::Char('e');
+        let rhs = Value::Char('d');
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn ge_test_9() {
+        let lhs = Value::Char('d');
+        let rhs = Value::Char('d');
+        assert_eq!(GE.apply(lhs, rhs).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn ge_test_10() {
+        let lhs = Value::Char('a');
+        let rhs = Value::I32(1);
+        assert!(GE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn ge_test_11() {
+        let lhs = Value::F32(2.0);
+        let rhs = Value::I32(1);
+        assert!(GE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn ge_test_12() {
+        let lhs = Value::I32(3);
+        let rhs = Value::Bool(false);
+        assert!(GE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn ge_test_13() {
+        let lhs = Value::Void;
+        let rhs = Value::I32(1);
+        assert!(GE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn ge_test_14() {
+        let lhs = Value::SPtr(0x2);
+        let rhs = Value::I32(1);
+        assert!(GE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn ge_test_15() {
+        let lhs = Value::I32(6);
+        let rhs = Value::IPtr(0x1);
+        assert!(GE.apply(lhs, rhs).is_err());
+    }
+
+    #[test]
+    fn ge_test_16() {
+        let lhs = Value::Void;
+        let rhs = Value::Void;
+        assert!(GE.apply(lhs, rhs).is_err());
+    }
+
 }
