@@ -43,6 +43,15 @@ pub struct Thread<'a> {
     label_table: LabelTable,
 }
 
+macro_rules! expect_value {
+    ($expr:expr, $ctor:ident, $($args:tt),+) => (
+        match $expr {
+            cookie::Value::$ctor(v) => Ok(v),
+            v => Err(format!($($args),+, bad_value = v))
+        }
+    )
+}
+
 impl<'a> Thread<'a> {
     pub fn new(instructions: &'a InstructionList, labels: LabelTable) -> Thread<'a> {
         use self::cookie::Value;
@@ -93,10 +102,8 @@ impl<'a> Thread<'a> {
                 self.pc + 1
             },
             JUMP(label) => *self.get_label(label)?,
-            PRINTS => {
-                self.do_print()?;
-                self.pc + 1
-            },
+            JUMPS => expect_value!(self.pop()?, IPtr, "Cannot jump to non-IPtr value {bad_value}")?,
+            PRINTS => { self.do_print()?; self.pc + 1 },
             _ => panic!("Unimplemented instruction: {:?}", inst)
         };
         return Ok(());
@@ -121,16 +128,12 @@ impl<'a> Thread<'a> {
         use self::cookie::RegisterName;
         match reg {
             RegisterName::StackPointer => {
-                match self.pop()? {
-                    Value::SPtr(v) => self.stack.resize(v, Value::Void),
-                    v => return Err(format!("Expecting {} value on stack but got {} instead.", Type::SPtr, v.get_type()))
-                };
+                let v = self.pop()?;
+                self.stack.resize(expect_value!(v, SPtr, "Expecting SPtr value on stack but got {bad_value} instead.")?, Value::Void);
             }
             RegisterName::ProgramCounter => {
-                match self.pop()? {
-                    Value::IPtr(v) => self.pc = v,
-                    v => return Err(format!("Expecting {} value on stack but got {} instead.", Type::IPtr, v.get_type()))
-                };
+                let v = self.pop()?;
+                self.pc = expect_value!(v, IPtr, "Expecting IPtr value on stack but got {bad_value} instead")?;
             }
             _ => panic!("Unimplemented register access {:?}", reg)
         }
@@ -487,6 +490,30 @@ mod test {
     fn jump_test_2() {
         let insts = vec![
             JUMP("label".to_string()),
+        ];
+        let mut thread = Thread::new(&insts, HashMap::new());
+        assert!(thread.exec().is_err());
+    }
+
+    #[test]
+    fn jumps_test_1() {
+        let insts = vec![
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::IPtr(5)),
+            JUMPS,
+            POP,
+            PUSHC(Value::I32(2)),
+            STACK_UNARY(UOp::NEG),
+        ];
+        let mut thread = Thread::new(&insts, HashMap::new());
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
+    }
+
+    #[test]
+    fn jumps_test_2() {
+        let insts = vec![
+            PUSHC(Value::I32(0)),
+            JUMPS,
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
