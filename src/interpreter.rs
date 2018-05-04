@@ -47,32 +47,46 @@ impl<'a> Thread<'a> {
     pub fn exec(&mut self) -> Result<Option<cookie::Value>, String> {
         while self.pc < self.instructions.len() {
             let inst =  &self.instructions[self.pc];
-            self.exec_instruction(&inst);
+            self.exec_instruction(&inst)?;
         }
-        return Ok(None);
+        return Ok(self.stack.pop());
     }
 
     fn exec_instruction(&mut self, inst: &cookie::Instruction) -> Result<(), String> {
         use cookie_base::Instruction::*;
-        match inst {
-            PUSHR(reg) => self.do_pushr(reg)?,
-            PUSHC(v) => self.stack.push(v.clone()),
-            POPR(reg) => self.do_popr(reg)?,
-            POP => { self.pop()?; }
-            // STACK(op, t) => self.do_stack_op(op, t)?,
+        self.pc = match inst {
+            PUSHR(reg) => {
+                self.do_pushr(reg)?;
+                self.pc + 1
+            },
+            PUSHC(v) => {
+                self.stack.push(v.clone());
+                self.pc + 1
+            },
+            POPR(reg) => {
+                self.do_popr(reg)?;
+                self.pc + 1
+            },
+            POP => { self.pop()?; self.pc + 1 },
             STACK_BINARY(op) => {
                 let rhs = self.pop()?;
                 let lhs = self.pop()?;
-                op.apply_to(lhs, rhs);
+                let res = op.apply_to(lhs, rhs)?;
+                self.stack.push(res);
+                self.pc + 1
             },
             STACK_UNARY(op) => {
                 let val = self.pop()?;
-                op.apply_to(val);
+                let res = op.apply_to(val)?;
+                self.stack.push(res);
+                self.pc + 1
             }
-            PRINTS => self.do_print()?,
+            PRINTS => {
+                self.do_print()?;
+                self.pc + 1
+            },
             _ => panic!("Unimplemented instruction: {:?}", inst)
         };
-        self.pc += 1;
         return Ok(());
     }
 
@@ -120,12 +134,4 @@ impl<'a> Thread<'a> {
     fn pop(&mut self) -> Result<cookie::Value, String> {
         self.stack.pop().ok_or("Cannot pop value from stack: stack is empty.".to_string())
     }
-}
-
-fn print_stack(stack: &Stack) {
-    print!("[");
-    for elem in stack {
-        print!("{:?}, ", elem);
-    }
-    println!("]");
 }

@@ -36,10 +36,9 @@ fn main() {
     use interpreter::*;
     let instructions: InstructionList = vec![
         PUSHC(Value::I32(1)),
-        PRINTS,
         PUSHC(Value::I32(2)),
-        PRINTS,
-        PUSHC(Value::I32(3)),
+        STACK_BINARY(BOp::ADD),
+        STACK_UNARY(UOp::NEG),
         PRINTS,
         PUSHC(Value::Char('\n')),
         PRINTS,
