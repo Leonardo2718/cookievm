@@ -25,9 +25,11 @@ License:
 */
 
 use cookie_base as cookie;
+use std::collections::HashMap;
 
 pub type InstructionList = Vec<cookie::Instruction>;
 pub type Stack = Vec<cookie::Value>;
+pub type LabelTable = HashMap<String, usize>;
 
 /*
 The `Thread` struct handles execution of Cookie code.
@@ -37,11 +39,20 @@ pub struct Thread<'a> {
     stack: Stack,
     fp: usize,
     pc: usize,
+    gpr: [cookie::Value; 16],
+    label_table: LabelTable,
 }
 
 impl<'a> Thread<'a> {
-    pub fn new(instructions: &'a InstructionList) -> Thread<'a> {
-        Thread { instructions: instructions, stack: Vec::new(), fp: 0, pc: 0 }
+    pub fn new(instructions: &'a InstructionList, labels: LabelTable) -> Thread<'a> {
+        use self::cookie::Value;
+        Thread  { instructions: instructions
+                , stack: Vec::new()
+                , fp: 0
+                , pc: 0
+                , gpr: [Value::Void; 16]
+                , label_table: labels
+                }
     }
 
     pub fn exec(&mut self) -> Result<Option<cookie::Value>, String> {
@@ -80,7 +91,7 @@ impl<'a> Thread<'a> {
                 let res = op.apply_to(val)?;
                 self.stack.push(res);
                 self.pc + 1
-            }
+            },
             PRINTS => {
                 self.do_print()?;
                 self.pc + 1
@@ -148,7 +159,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(3)),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
     }
 
@@ -157,7 +168,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::F32(3.14159)),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::F32(3.14159));
     }
 
@@ -166,7 +177,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Bool(true)),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
     }
 
@@ -175,7 +186,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Char('w')),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Char('w'));
     }
 
@@ -184,7 +195,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::IPtr(0x5)),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0x5));
     }
 
@@ -193,7 +204,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::SPtr(0x5)),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(0x5));
     }
 
@@ -202,7 +213,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Void);
     }
 
@@ -212,7 +223,7 @@ mod test {
             PUSHC(Value::I32(2)),
             POP,
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().unwrap().is_none());
     }
 
@@ -222,7 +233,7 @@ mod test {
             PUSHC(Value::F32(2.71828)),
             POP,
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().unwrap().is_none());
     }
 
@@ -232,7 +243,7 @@ mod test {
             PUSHC(Value::Bool(true)),
             POP,
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().unwrap().is_none());
     }
 
@@ -242,7 +253,7 @@ mod test {
             PUSHC(Value::Void),
             POP,
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().unwrap().is_none());
     }
 
@@ -253,7 +264,7 @@ mod test {
             PUSHC(Value::I32(2)),
             STACK_BINARY(BOp::ADD),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
     }
 
@@ -264,7 +275,7 @@ mod test {
             PUSHC(Value::I32(4)),
             STACK_BINARY(BOp::SUB),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0x7a7));
     }
 
@@ -275,7 +286,7 @@ mod test {
             PUSHC(Value::I32(4)),
             STACK_BINARY(BOp::ADD),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -286,7 +297,7 @@ mod test {
             PUSHC(Value::I32(4)),
             STACK_BINARY(BOp::MUL),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -296,7 +307,7 @@ mod test {
             PUSHC(Value::I32(3)),
             STACK_UNARY(UOp::NEG),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-3));
     }
 
@@ -306,7 +317,7 @@ mod test {
             PUSHC(Value::F32(2.71828)),
             STACK_UNARY(UOp::NEG),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::F32(-2.71828));
     }
 
@@ -316,7 +327,7 @@ mod test {
             PUSHC(Value::Bool(false)),
             STACK_UNARY(UOp::NOT),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
     }
 
@@ -326,7 +337,7 @@ mod test {
             PUSHC(Value::I32(0)),
             STACK_UNARY(UOp::NOT),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
     }
 
@@ -336,7 +347,7 @@ mod test {
             PUSHC(Value::Void),
             STACK_UNARY(UOp::NOT),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -345,7 +356,7 @@ mod test {
         let insts = vec![
             PUSHR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(0));
     }
 
@@ -357,7 +368,7 @@ mod test {
             PUSHC(Value::Char('c')),
             PUSHR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(3));
     }
 
@@ -370,7 +381,7 @@ mod test {
             POP,
             PUSHR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(2));
     }
 
@@ -379,7 +390,7 @@ mod test {
         let insts = vec![
             PUSHR(RegisterName::ProgramCounter),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0));
     }
 
@@ -391,7 +402,7 @@ mod test {
             PUSHC(Value::Char('c')),
             PUSHR(RegisterName::ProgramCounter),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(3));
     }
 
@@ -404,7 +415,7 @@ mod test {
             POP,
             PUSHR(RegisterName::ProgramCounter),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(4));
     }
 
@@ -418,7 +429,7 @@ mod test {
             PUSHC(Value::SPtr(2)),
             POPR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(2));
     }
 
@@ -428,7 +439,7 @@ mod test {
             PUSHC(Value::I32(1)),
             POPR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -438,7 +449,7 @@ mod test {
             PUSHC(Value::IPtr(0x0)),
             POPR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -448,7 +459,7 @@ mod test {
             PUSHC(Value::SPtr(0x2)),
             POPR(RegisterName::ProgramCounter),
         ];
-        let mut thread = Thread::new(&insts);
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 }

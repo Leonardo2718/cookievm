@@ -24,8 +24,7 @@ License:
 
 */
 
-// use std::fmt;
-// use std::result;
+use std::collections::HashMap;
 
 mod cookie_base;
 mod interpreter;
@@ -59,7 +58,7 @@ fn main() {
         PUSHC(Value::Char('\n')),
         PRINTS,
     ];
-    let mut thread = Thread::new(&instructions);
+    let mut thread = Thread::new(&instructions, HashMap::new());
     match thread.exec() {
         Ok(_) => {},
         Err(msg) => println!("{}", msg)
