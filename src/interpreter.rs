@@ -88,6 +88,12 @@ impl<'a> Thread<'a> {
                 self.pc + 1
             },
             POP => { self.pop()?; self.pc + 1 },
+            LOADATS => {
+                let loc = expect_value!(self.pop()?, SPtr, "Cannot load from non-SPtr value {bad_value}")?;
+                let val = self.stack[loc];
+                self.stack.push(val);
+                self.pc + 1
+            },
             STACK_BINARY(op) => {
                 let rhs = self.pop()?;
                 let lhs = self.pop()?;
@@ -568,6 +574,34 @@ mod test {
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
         let mut thread = Thread::new(&insts, labels);
+        assert!(thread.exec().is_err());
+    }
+
+    #[test]
+    fn loadats_test_1() {
+        let insts = vec![
+            PUSHC(Value::I32(2)),
+            PUSHR(RegisterName::StackPointer),
+            PUSHC(Value::I32(1)),
+            STACK_BINARY(BOp::SUB),
+            LOADATS,
+            STACK_BINARY(BOp::ADD),
+        ];
+        let mut thread = Thread::new(&insts, HashMap::new());
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(4));
+    }
+
+    #[test]
+    fn loadats_test_2() {
+        let insts = vec![
+            PUSHC(Value::I32(2)),
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::I32(1)),
+            STACK_BINARY(BOp::SUB),
+            LOADATS,
+            STACK_BINARY(BOp::ADD),
+        ];
+        let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 }

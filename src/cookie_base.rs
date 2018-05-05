@@ -270,6 +270,8 @@ pub enum Instruction {
     POPR(RegisterName),
     POP,
 
+    LOADATS,
+
     STACK_BINARY(BOp),
     STACK_UNARY(UOp),
 
