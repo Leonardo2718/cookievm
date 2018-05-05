@@ -103,6 +103,11 @@ impl<'a> Thread<'a> {
             },
             JUMP(label) => *self.get_label(label)?,
             JUMPS => expect_value!(self.pop()?, IPtr, "Cannot jump to non-IPtr value {bad_value}")?,
+            BRANCHONS(ival, label) => {
+                let sval = self.pop()?;
+                let condition = expect_value!(cookie::BOp::EQ.apply_to(*ival, sval)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
+                if condition { *self.get_label(label)? } else { self.pc + 1 }
+            },
             PRINTS => { self.do_print()?; self.pc + 1 },
             _ => panic!("Unimplemented instruction: {:?}", inst)
         };
@@ -124,7 +129,6 @@ impl<'a> Thread<'a> {
 
     fn do_popr(&mut self, reg: &cookie::RegisterName) -> Result<(), String> {
         use self::cookie::Value;
-        use self::cookie::Type;
         use self::cookie::RegisterName;
         match reg {
             RegisterName::StackPointer => {
@@ -502,7 +506,7 @@ mod test {
             PUSHC(Value::IPtr(5)),
             JUMPS,
             POP,
-            PUSHC(Value::I32(2)),
+            PUSHC(Value::Void),
             STACK_UNARY(UOp::NEG),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
@@ -516,6 +520,54 @@ mod test {
             JUMPS,
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
+        assert!(thread.exec().is_err());
+    }
+
+    #[test]
+    fn branchons_test_1() {
+        let insts = vec![
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::Bool(true)),
+            BRANCHONS(Value::Bool(true), "label".to_string()),
+            POP,
+            PUSHC(Value::Void),
+            STACK_UNARY(UOp::NEG),
+        ];
+        let mut labels: LabelTable = HashMap::new();
+        labels.insert("label".to_string(), 5);
+        let mut thread = Thread::new(&insts, labels);
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
+    }
+
+    #[test]
+    fn branchons_test_2() {
+        let insts = vec![
+            PUSHC(Value::Void),
+            PUSHC(Value::Bool(true)),
+            BRANCHONS(Value::Bool(false), "label".to_string()),
+            POP,
+            PUSHC(Value::I32(-1)),
+            STACK_UNARY(UOp::NEG),
+        ];
+        let mut labels: LabelTable = HashMap::new();
+        labels.insert("label".to_string(), 5);
+        let mut thread = Thread::new(&insts, labels);
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(1));
+    }
+
+    #[test]
+    fn branchons_test_3() {
+        let insts = vec![
+            PUSHC(Value::Void),
+            PUSHC(Value::Bool(true)),
+            BRANCHONS(Value::I32(1), "label".to_string()),
+            POP,
+            PUSHC(Value::I32(-1)),
+            STACK_UNARY(UOp::NEG),
+        ];
+        let mut labels: LabelTable = HashMap::new();
+        labels.insert("label".to_string(), 5);
+        let mut thread = Thread::new(&insts, labels);
         assert!(thread.exec().is_err());
     }
 }
