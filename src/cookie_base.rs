@@ -286,6 +286,8 @@ pub enum Instruction {
     HALT,
 }
 
+// impl From<&str> for Instruction
+
 // tests ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[cfg(test)]

@@ -28,6 +28,7 @@ use std::collections::HashMap;
 
 mod cookie_base;
 mod interpreter;
+mod parser;
 
 fn main() {
     use cookie_base::*;
