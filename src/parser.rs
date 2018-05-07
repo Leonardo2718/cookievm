@@ -365,7 +365,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
                 },
                 "prints" => { insts.push(PRINTS); }
                 "reads" => { let t = parse_type(&mut lexer)?; insts.push(READS(t)); }
-                "halt" => { insts.push(HALT); }
+                "exit" => { insts.push(EXIT); }
                 id => return unexpected_id!(id)
             },
             Some(Token::Label(l)) => { labels.insert(l.to_string(), insts.len()); },

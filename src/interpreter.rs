@@ -115,6 +115,7 @@ impl<'a> Thread<'a> {
                 if condition { *self.get_label(label)? } else { self.pc + 1 }
             },
             PRINTS => { self.do_print()?; self.pc + 1 },
+            EXIT => { self.instructions.len() } // setting pc to past the end will force termination
             _ => panic!("Unimplemented instruction: {:?}", inst)
         };
         return Ok(());

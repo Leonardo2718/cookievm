@@ -283,7 +283,7 @@ pub enum Instruction {
     PRINTS,
     READS(Type),
 
-    HALT,
+    EXIT,
 }
 
 // impl From<&str> for Instruction
