@@ -359,10 +359,10 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
                 "storeto" => { insts.push(STORETO(Loc::Stack, Loc::Stack)); },
                 "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(l)); },
                 "djump" => { insts.push(DJUMP(Loc::Stack)); },
-                "branchons" => {
+                "branchon" => {
                     let v = parse_value(&mut lexer)?;
                     let l = eat_token!(lexer, Ident)?;
-                    insts.push(BRANCHONS(v, l));
+                    insts.push(BRANCHON(v, l, Loc::Stack));
                 },
                 "prints" => { insts.push(PRINTS); }
                 "reads" => { let t = parse_type(&mut lexer)?; insts.push(READS(t)); }

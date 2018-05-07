@@ -116,10 +116,10 @@ impl<'a> Thread<'a> {
             JUMP(label) => *self.get_label(label)?,
             DJUMP(src) => {
                 expect_value!(self.get_value(src)?, IPtr, "Cannot jump to non-IPtr value {bad_value}")?
-            }
-            BRANCHONS(ival, label) => {
-                let sval = self.pop()?;
-                let condition = expect_value!(cookie::BinaryOp::EQ.apply_to(*ival, sval)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
+            },
+            BRANCHON(imm, label, src) => {
+                let val = self.get_value(src)?;
+                let condition = expect_value!(cookie::BinaryOp::EQ.apply_to(*imm, val)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
                 if condition { *self.get_label(label)? } else { self.pc + 1 }
             },
             PRINTS => { self.do_print()?; self.pc + 1 },
@@ -572,7 +572,7 @@ mod test {
     }
 
     #[test]
-    fn jumps_test_2() {
+    fn djump_test_2() {
         let insts = vec![
             PUSHC(Value::I32(0)),
             DJUMP(Loc::Stack),
@@ -582,11 +582,11 @@ mod test {
     }
 
     #[test]
-    fn branchons_test_1() {
+    fn branchon_test_1() {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::Bool(true)),
-            BRANCHONS(Value::Bool(true), "label".to_string()),
+            BRANCHON(Value::Bool(true), "label".to_string(), Loc::Stack),
             POP,
             PUSHC(Value::Void),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -598,11 +598,11 @@ mod test {
     }
 
     #[test]
-    fn branchons_test_2() {
+    fn branchon_test_2() {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHONS(Value::Bool(false), "label".to_string()),
+            BRANCHON(Value::Bool(false), "label".to_string(), Loc::Stack),
             POP,
             PUSHC(Value::I32(-1)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -614,11 +614,11 @@ mod test {
     }
 
     #[test]
-    fn branchons_test_3() {
+    fn branchon_test_3() {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHONS(Value::I32(1), "label".to_string()),
+            BRANCHON(Value::I32(1), "label".to_string(), Loc::Stack),
             POP,
             PUSHC(Value::I32(-1)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),

@@ -285,7 +285,6 @@ pub enum Instruction {
     JUMP(String),
     DJUMP(Loc),
     BRANCHON(Value, String, Loc),
-    BRANCHONS(Value, String),
 
     PRINT(Loc),
     READ(Loc),
