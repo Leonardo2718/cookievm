@@ -287,9 +287,7 @@ pub enum Instruction {
     BRANCHON(Value, String, Loc),
 
     PRINT(Loc),
-    READ(Loc),
-    PRINTS,
-    READS(Type),
+    READ(Type, Loc),
 
     EXIT,
 }

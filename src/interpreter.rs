@@ -122,7 +122,7 @@ impl<'a> Thread<'a> {
                 let condition = expect_value!(cookie::BinaryOp::EQ.apply_to(*imm, val)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
                 if condition { *self.get_label(label)? } else { self.pc + 1 }
             },
-            PRINTS => { self.do_print()?; self.pc + 1 },
+            PRINT(src) => { print!("{}", self.get_value(src)?); self.pc + 1 },
             EXIT => { self.instructions.len() } // setting pc to past the end will force termination
             _ => panic!("Unimplemented instruction: {:?}", inst)
         };
@@ -157,12 +157,6 @@ impl<'a> Thread<'a> {
             _ => panic!("Unimplemented register access {:?}", reg)
         }
         return Ok(());
-    }
-
-    fn do_print(&mut self) -> Result<(), String> {
-        let v = self.pop()?;
-        print!("{}", v.value_as_str());
-        Ok(())
     }
 
     fn get_value(&mut self, loc: &cookie::Loc) -> Result<cookie::Value, String> {

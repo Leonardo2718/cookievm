@@ -364,8 +364,8 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
                     let l = eat_token!(lexer, Ident)?;
                     insts.push(BRANCHON(v, l, Loc::Stack));
                 },
-                "prints" => { insts.push(PRINTS); }
-                "reads" => { let t = parse_type(&mut lexer)?; insts.push(READS(t)); }
+                "print" => { insts.push(PRINT(Loc::Stack)); }
+                "read" => { let t = parse_type(&mut lexer)?; insts.push(READ(t, Loc::Stack)); }
                 "exit" => { insts.push(EXIT); }
                 id => return unexpected_id!(id)
             },
