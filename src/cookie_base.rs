@@ -281,14 +281,10 @@ pub enum Instruction {
 
     UOp(UnaryOp, Loc, Loc),
     BOp(BinaryOp, Loc, Loc, Loc),
-    // STACK_BINARY(BinaryOp),
-    // STACK_UNARY(UnaryOp),
 
-    AJUMP(Loc),
-    BRANCHON(Value, String, Loc),
     JUMP(String),
-    JUMPS,
-    // JUMPO(Value),
+    DJUMP(Loc),
+    BRANCHON(Value, String, Loc),
     BRANCHONS(Value, String),
 
     PRINT(Loc),

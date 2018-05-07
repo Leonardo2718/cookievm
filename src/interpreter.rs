@@ -114,7 +114,9 @@ impl<'a> Thread<'a> {
                 self.pc + 1
             },
             JUMP(label) => *self.get_label(label)?,
-            JUMPS => expect_value!(self.pop()?, IPtr, "Cannot jump to non-IPtr value {bad_value}")?,
+            DJUMP(src) => {
+                expect_value!(self.get_value(src)?, IPtr, "Cannot jump to non-IPtr value {bad_value}")?
+            }
             BRANCHONS(ival, label) => {
                 let sval = self.pop()?;
                 let condition = expect_value!(cookie::BinaryOp::EQ.apply_to(*ival, sval)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
@@ -556,11 +558,11 @@ mod test {
     }
 
     #[test]
-    fn jumps_test_1() {
+    fn djump_test_1() {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::IPtr(5)),
-            JUMPS,
+            DJUMP(Loc::Stack),
             POP,
             PUSHC(Value::Void),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -573,7 +575,7 @@ mod test {
     fn jumps_test_2() {
         let insts = vec![
             PUSHC(Value::I32(0)),
-            JUMPS,
+            DJUMP(Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
