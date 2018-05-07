@@ -88,10 +88,16 @@ impl<'a> Thread<'a> {
                 self.pc + 1
             },
             POP => { self.pop()?; self.pc + 1 },
-            LOADATS => {
-                let loc = expect_value!(self.pop()?, SPtr, "Cannot load from non-SPtr value {bad_value}")?;
-                let val = self.stack[loc];
-                self.stack.push(val);
+            LOADFROM(dest, src) => {
+                let addr = expect_value!(self.get_value(src)?, SPtr, "Cannot load from non-SPtr value {bad_value}")?;
+                let val = self.stack[addr];
+                self.put_value(dest, val)?;
+                self.pc + 1
+            },
+            STORETO(dest, src) => {
+                let addr = expect_value!(self.get_value(dest)?, SPtr, "Cannot load from non-SPtr value {bad_value}")?;
+                let val = self.get_value(src)?;
+                self.stack[addr] = val;
                 self.pc + 1
             },
             STACK_BINARY(op) => {
@@ -111,7 +117,7 @@ impl<'a> Thread<'a> {
             JUMPS => expect_value!(self.pop()?, IPtr, "Cannot jump to non-IPtr value {bad_value}")?,
             BRANCHONS(ival, label) => {
                 let sval = self.pop()?;
-                let condition = expect_value!(cookie::BOp::EQ.apply_to(*ival, sval)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
+                let condition = expect_value!(cookie::BinaryOp::EQ.apply_to(*ival, sval)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
                 if condition { *self.get_label(label)? } else { self.pc + 1 }
             },
             PRINTS => { self.do_print()?; self.pc + 1 },
@@ -155,6 +161,49 @@ impl<'a> Thread<'a> {
         let v = self.pop()?;
         print!("{}", v.value_as_str());
         Ok(())
+    }
+
+    fn get_value(&mut self, loc: &cookie::Loc) -> Result<cookie::Value, String> {
+        use self::cookie::Loc;
+        match loc {
+            Loc::Stack => self.pop(),
+            Loc::Reg(r) => self.register_get(*r),
+        }
+    }
+
+    fn put_value(&mut self, loc: &cookie::Loc, val: cookie::Value) -> Result<(), String> {
+        use self::cookie::Loc;
+        match loc {
+            Loc::Stack => { self.stack.push(val); Ok(()) },
+            Loc::Reg(r) => self.register_put(*r, val),
+        }
+    }
+
+    fn register_get(&mut self, reg: cookie::RegisterName) -> Result<cookie::Value, String> {
+        use self::cookie::Value;
+        use self::cookie::RegisterName;
+        match reg {
+            RegisterName::StackPointer => Ok(Value::SPtr(self.stack.len())),
+            RegisterName::ProgramCounter => Ok(Value::IPtr(self.pc)),
+            _ => Err(format!("Unimplemented register access: {}", reg))
+        }
+    }
+
+    fn register_put(&mut self, reg: cookie::RegisterName, val: cookie::Value) -> Result<(), String> {
+        use self::cookie::Value;
+        use self::cookie::RegisterName;
+        match reg {
+            RegisterName::StackPointer => {
+                let v = expect_value!(val, SPtr, "Expecting SPtr value but got {bad_value} instead.")?;
+                self.stack.resize(v, Value::Void);
+                Ok(())
+            }
+            RegisterName::ProgramCounter => {
+                self.pc = expect_value!(val, IPtr, "Expecting IPtr value but got {bad_value} instead")?;
+                Ok(())
+            }
+            _ => Err(format!("Unimplemented register access {}", reg))
+        }
     }
 
     fn pop(&mut self) -> Result<cookie::Value, String> {
@@ -281,7 +330,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::I32(2)),
-            STACK_BINARY(BOp::ADD),
+            STACK_BINARY(BinaryOp::ADD),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
@@ -292,7 +341,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::IPtr(0x7ab)),
             PUSHC(Value::I32(4)),
-            STACK_BINARY(BOp::SUB),
+            STACK_BINARY(BinaryOp::SUB),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0x7a7));
@@ -303,7 +352,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::F32(4.0)),
             PUSHC(Value::I32(4)),
-            STACK_BINARY(BOp::ADD),
+            STACK_BINARY(BinaryOp::ADD),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
@@ -314,7 +363,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::I32(4)),
-            STACK_BINARY(BOp::MUL),
+            STACK_BINARY(BinaryOp::MUL),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
@@ -324,7 +373,7 @@ mod test {
     fn uniop_test_1() {
         let insts = vec![
             PUSHC(Value::I32(3)),
-            STACK_UNARY(UOp::NEG),
+            STACK_UNARY(UnaryOp::NEG),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-3));
@@ -334,7 +383,7 @@ mod test {
     fn uniop_test_2() {
         let insts = vec![
             PUSHC(Value::F32(2.71828)),
-            STACK_UNARY(UOp::NEG),
+            STACK_UNARY(UnaryOp::NEG),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::F32(-2.71828));
@@ -344,7 +393,7 @@ mod test {
     fn uniop_test_3() {
         let insts = vec![
             PUSHC(Value::Bool(false)),
-            STACK_UNARY(UOp::NOT),
+            STACK_UNARY(UnaryOp::NOT),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
@@ -354,7 +403,7 @@ mod test {
     fn uniop_test_4() {
         let insts = vec![
             PUSHC(Value::I32(0)),
-            STACK_UNARY(UOp::NOT),
+            STACK_UNARY(UnaryOp::NOT),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
@@ -364,7 +413,7 @@ mod test {
     fn uniop_test_5() {
         let insts = vec![
             PUSHC(Value::Void),
-            STACK_UNARY(UOp::NOT),
+            STACK_UNARY(UnaryOp::NOT),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
@@ -489,7 +538,7 @@ mod test {
             JUMP("label".to_string()),
             POP,
             PUSHC(Value::I32(2)),
-            STACK_UNARY(UOp::NEG),
+            STACK_UNARY(UnaryOp::NEG),
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 4);
@@ -514,7 +563,7 @@ mod test {
             JUMPS,
             POP,
             PUSHC(Value::Void),
-            STACK_UNARY(UOp::NEG),
+            STACK_UNARY(UnaryOp::NEG),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
@@ -538,7 +587,7 @@ mod test {
             BRANCHONS(Value::Bool(true), "label".to_string()),
             POP,
             PUSHC(Value::Void),
-            STACK_UNARY(UOp::NEG),
+            STACK_UNARY(UnaryOp::NEG),
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
@@ -554,7 +603,7 @@ mod test {
             BRANCHONS(Value::Bool(false), "label".to_string()),
             POP,
             PUSHC(Value::I32(-1)),
-            STACK_UNARY(UOp::NEG),
+            STACK_UNARY(UnaryOp::NEG),
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
@@ -570,7 +619,7 @@ mod test {
             BRANCHONS(Value::I32(1), "label".to_string()),
             POP,
             PUSHC(Value::I32(-1)),
-            STACK_UNARY(UOp::NEG),
+            STACK_UNARY(UnaryOp::NEG),
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
@@ -579,28 +628,53 @@ mod test {
     }
 
     #[test]
-    fn loadats_test_1() {
+    fn loadfrom_test_1() {
         let insts = vec![
             PUSHC(Value::I32(2)),
             PUSHR(RegisterName::StackPointer),
             PUSHC(Value::I32(1)),
-            STACK_BINARY(BOp::SUB),
-            LOADATS,
-            STACK_BINARY(BOp::ADD),
+            STACK_BINARY(BinaryOp::SUB),
+            LOADFROM(Loc::Stack, Loc::Stack),
+            STACK_BINARY(BinaryOp::ADD),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(4));
     }
 
     #[test]
-    fn loadats_test_2() {
+    fn loadfrom_test_2() {
         let insts = vec![
             PUSHC(Value::I32(2)),
             PUSHC(Value::I32(1)),
             PUSHC(Value::I32(1)),
-            STACK_BINARY(BOp::SUB),
-            LOADATS,
-            STACK_BINARY(BOp::ADD),
+            STACK_BINARY(BinaryOp::SUB),
+            LOADFROM(Loc::Stack, Loc::Stack),
+            STACK_BINARY(BinaryOp::ADD),
+        ];
+        let mut thread = Thread::new(&insts, HashMap::new());
+        assert!(thread.exec().is_err());
+    }
+
+    #[test]
+    fn storeto_test_1() {
+        let insts = vec![
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::I32(0)),
+            PUSHC(Value::SPtr(0x1)),
+            STORETO(Loc::Stack, Loc::Stack),
+            STACK_BINARY(BinaryOp::ADD),
+        ];
+        let mut thread = Thread::new(&insts, HashMap::new());
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(1));
+    }
+
+    #[test]
+    fn storeto_test_2() {
+        let insts = vec![
+            PUSHC(Value::I32(2)),
+            PUSHC(Value::I32(1)),
+            STORETO(Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());

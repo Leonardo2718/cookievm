@@ -250,8 +250,8 @@ macro_rules! eat_token {
 
 fn parse_stack_op<'a>(lexer: &mut Lexer<'a>) -> Result<Instruction> {
     use cookie_base::Instruction::*;
-    use cookie_base::UOp::*;
-    use cookie_base::BOp::*;
+    use cookie_base::UnaryOp::*;
+    use cookie_base::BinaryOp::*;
     let id = eat_token!(lexer, Ident)?;
     let inst = match id.to_lowercase().as_ref() {
         "neg" => STACK_UNARY(NEG),
@@ -355,7 +355,8 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
                     insts.push(POPR(reg));
                 },
                 "pop" => { insts.push(POP); },
-                "loadats" => { insts.push(LOADATS); },
+                "loadfrom" => { insts.push(LOADFROM(Loc::Stack, Loc::Stack)); },
+                "storeto" => { insts.push(STORETO(Loc::Stack, Loc::Stack)); },
                 "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(l)); },
                 "jumps" => { insts.push(JUMPS); },
                 "branchons" => {
@@ -590,19 +591,19 @@ mod test {
     #[test]
     fn parse_stack_op_test_1() {
         let inst = parse_stack_op(&mut Lexer::new("Add".chars())).unwrap();
-        assert_eq!(inst, Instruction::STACK_BINARY(BOp::ADD));
+        assert_eq!(inst, Instruction::STACK_BINARY(BinaryOp::ADD));
     }
 
     #[test]
     fn parse_stack_op_test_2() {
         let inst = parse_stack_op(&mut Lexer::new("EQ".chars())).unwrap();
-        assert_eq!(inst, Instruction::STACK_BINARY(BOp::EQ));
+        assert_eq!(inst, Instruction::STACK_BINARY(BinaryOp::EQ));
     }
 
     #[test]
     fn parse_stack_op_test_3() {
         let inst = parse_stack_op(&mut Lexer::new("NOT".chars())).unwrap();
-        assert_eq!(inst, Instruction::STACK_UNARY(UOp::NOT));
+        assert_eq!(inst, Instruction::STACK_UNARY(UnaryOp::NOT));
     }
 
     #[test]
@@ -750,7 +751,7 @@ mod test {
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(3.1)));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(4.2)));
-        assert_eq!(*iter.next().unwrap(), STACK_BINARY(BOp::ADD));
+        assert_eq!(*iter.next().unwrap(), STACK_BINARY(BinaryOp::ADD));
         assert!(iter.next().is_none());
     }
 

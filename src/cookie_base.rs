@@ -138,19 +138,19 @@ impl fmt::Display for RegisterName {
 // cookie operations ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(Debug,Clone,PartialEq)]
-pub enum BOp {
+pub enum BinaryOp {
     ADD, SUB, MUL, DIV, MOD,
     AND, OR, XOR,
     EQ, LT, LE, GT, GE,
 }
 
-impl BOp {
+impl BinaryOp {
     pub fn apply_to(&self, lhs: Value, rhs: Value) -> Result<Value> {
         let apply_err = Err(format!("Cannot apply {} operation to {} and {}", self, lhs, rhs));
         let apply_err_1 = apply_err.clone();
         let apply_err_2 = apply_err.clone();
         match self {
-            BOp::ADD => apply_err
+            BinaryOp::ADD => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, +))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, F32, +))
                 .or_else(apply_binary!(
@@ -163,7 +163,7 @@ impl BOp {
                     SPtr,
                     apply_err_2.or_else(apply_unary!(I32, rhs, SPtr, (|i| i as usize)))?,
                     SPtr, +)),
-            BOp::SUB => apply_err
+            BinaryOp::SUB => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, -))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, F32, -))
                 .or_else(apply_binary!(
@@ -176,17 +176,17 @@ impl BOp {
                     SPtr,
                     apply_err_2.or_else(apply_unary!(I32, rhs, SPtr, (|i| i as usize)))?,
                     SPtr, -)),
-            BOp::MUL => apply_err
+            BinaryOp::MUL => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, *))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, F32, *)),
-            BOp::DIV => apply_err
+            BinaryOp::DIV => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, /))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, F32, /)),
-            BOp::MOD => apply_err
+            BinaryOp::MOD => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, %))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, F32, %)),
 
-            BOp::EQ => apply_err
+            BinaryOp::EQ => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, ==))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, ==))
                 .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, ==))
@@ -197,30 +197,30 @@ impl BOp {
                     (Value::Void, Value::Void) => Ok(Value::Bool(true)),
                     _ => Err(err)
                 }),
-            BOp::LT => apply_err
+            BinaryOp::LT => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, <))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, <))
                 .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, <)),
-            BOp::LE => apply_err
+            BinaryOp::LE => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, <=))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, <=))
                 .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, <=)),
-            BOp::GT => apply_err
+            BinaryOp::GT => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, >))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, >))
                 .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, >)),
-            BOp::GE => apply_err
+            BinaryOp::GE => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, >=))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, >=))
                 .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, >=)),
 
-            BOp::AND => apply_err
+            BinaryOp::AND => apply_err
                 .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, &&))
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, &)),
-            BOp::OR => apply_err
+            BinaryOp::OR => apply_err
                 .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, ||))
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, |)),
-            BOp::XOR => apply_err
+            BinaryOp::XOR => apply_err
                 .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, !=))
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, ^)),
         }
@@ -228,20 +228,20 @@ impl BOp {
 }
 
 #[derive(Debug,Clone,PartialEq)]
-pub enum UOp {
+pub enum UnaryOp {
     NEG, NOT
 }
 
-impl UOp {
+impl UnaryOp {
     pub fn apply_to(&self, val: Value) -> Result<Value> {
         let apply_err = Err(format!("Cannot apply {} operation to {}", self, val));
         let apply_err_1 = apply_err.clone();
         let apply_err_2 = apply_err.clone();
         match self {
-            UOp::NEG => apply_err
+            UnaryOp::NEG => apply_err
                 .or_else(apply_unary!(I32, val, I32, -))
                 .or_else(apply_unary!(F32, val, F32, -)),
-            UOp::NOT => apply_err
+            UnaryOp::NOT => apply_err
                 .or_else(apply_unary!(Bool, val, Bool, !))
                 .or_else(apply_unary!(I32, val, I32, !)),
             _ => apply_err
@@ -249,13 +249,13 @@ impl UOp {
     }
 }
 
-impl fmt::Display for BOp {
+impl fmt::Display for BinaryOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl fmt::Display for UOp {
+impl fmt::Display for UnaryOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
@@ -264,22 +264,35 @@ impl fmt::Display for UOp {
 // cookie instructions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(Debug,Clone,PartialEq)]
+pub enum Loc {
+    Stack,
+    Reg(RegisterName),
+}
+
+#[derive(Debug,Clone,PartialEq)]
 pub enum Instruction {
     PUSHR(RegisterName),
     PUSHC(Value),
     POPR(RegisterName),
     POP,
 
-    LOADATS,
+    LOADFROM(Loc, Loc),
+    STORETO(Loc, Loc),
 
-    STACK_BINARY(BOp),
-    STACK_UNARY(UOp),
+    UOp(UnaryOp, Loc, Loc),
+    BOp(BinaryOp, Loc, Loc, Loc),
+    STACK_BINARY(BinaryOp),
+    STACK_UNARY(UnaryOp),
 
+    AJUMP(Loc),
+    BRANCHON(Value, String, Loc),
     JUMP(String),
     JUMPS,
     // JUMPO(Value),
     BRANCHONS(Value, String),
 
+    PRINT(Loc),
+    READ(Loc),
     PRINTS,
     READS(Type),
 
@@ -293,8 +306,8 @@ pub enum Instruction {
 #[cfg(test)]
 mod test {
     use super::*;
-    use super::UOp::*;
-    use super::BOp::*;
+    use super::UnaryOp::*;
+    use super::BinaryOp::*;
 
     #[test]
     fn apply_unary_test_1() {
