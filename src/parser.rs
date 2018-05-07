@@ -254,21 +254,21 @@ fn parse_stack_op<'a>(lexer: &mut Lexer<'a>) -> Result<Instruction> {
     use cookie_base::BinaryOp::*;
     let id = eat_token!(lexer, Ident)?;
     let inst = match id.to_lowercase().as_ref() {
-        "neg" => STACK_UNARY(NEG),
-        "not" => STACK_UNARY(NOT),
-        "add" => STACK_BINARY(ADD),
-        "sub" => STACK_BINARY(SUB),
-        "mul" => STACK_BINARY(MUL),
-        "div" => STACK_BINARY(DIV),
-        "mod" => STACK_BINARY(MOD),
-        "eq" => STACK_BINARY(EQ),
-        "lt" => STACK_BINARY(LT),
-        "le" => STACK_BINARY(LE),
-        "gt" => STACK_BINARY(GT),
-        "ge" => STACK_BINARY(GE),
-        "and" => STACK_BINARY(AND),
-        "or" => STACK_BINARY(OR),
-        "xor" => STACK_BINARY(XOR),
+        "neg" => UOp(NEG, Loc::Stack, Loc::Stack),
+        "not" => UOp(NOT, Loc::Stack, Loc::Stack),
+        "add" => BOp(ADD, Loc::Stack, Loc::Stack, Loc::Stack),
+        "sub" => BOp(SUB, Loc::Stack, Loc::Stack, Loc::Stack),
+        "mul" => BOp(MUL, Loc::Stack, Loc::Stack, Loc::Stack),
+        "div" => BOp(DIV, Loc::Stack, Loc::Stack, Loc::Stack),
+        "mod" => BOp(MOD, Loc::Stack, Loc::Stack, Loc::Stack),
+        "eq" => BOp(EQ, Loc::Stack, Loc::Stack, Loc::Stack),
+        "lt" => BOp(LT, Loc::Stack, Loc::Stack, Loc::Stack),
+        "le" => BOp(LE, Loc::Stack, Loc::Stack, Loc::Stack),
+        "gt" => BOp(GT, Loc::Stack, Loc::Stack, Loc::Stack),
+        "ge" => BOp(GE, Loc::Stack, Loc::Stack, Loc::Stack),
+        "and" => BOp(AND, Loc::Stack, Loc::Stack, Loc::Stack),
+        "or" => BOp(OR, Loc::Stack, Loc::Stack, Loc::Stack),
+        "xor" => BOp(XOR, Loc::Stack, Loc::Stack, Loc::Stack),
         id => return unexpected_id!(id)
     };
     Ok(inst)
@@ -591,19 +591,19 @@ mod test {
     #[test]
     fn parse_stack_op_test_1() {
         let inst = parse_stack_op(&mut Lexer::new("Add".chars())).unwrap();
-        assert_eq!(inst, Instruction::STACK_BINARY(BinaryOp::ADD));
+        assert_eq!(inst, Instruction::BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_stack_op_test_2() {
         let inst = parse_stack_op(&mut Lexer::new("EQ".chars())).unwrap();
-        assert_eq!(inst, Instruction::STACK_BINARY(BinaryOp::EQ));
+        assert_eq!(inst, Instruction::BOp(BinaryOp::EQ, Loc::Stack, Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_stack_op_test_3() {
         let inst = parse_stack_op(&mut Lexer::new("NOT".chars())).unwrap();
-        assert_eq!(inst, Instruction::STACK_UNARY(UnaryOp::NOT));
+        assert_eq!(inst, Instruction::UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack));
     }
 
     #[test]
@@ -751,7 +751,7 @@ mod test {
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(3.1)));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(4.2)));
-        assert_eq!(*iter.next().unwrap(), STACK_BINARY(BinaryOp::ADD));
+        assert_eq!(*iter.next().unwrap(), BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack));
         assert!(iter.next().is_none());
     }
 

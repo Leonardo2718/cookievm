@@ -100,17 +100,17 @@ impl<'a> Thread<'a> {
                 self.stack[addr] = val;
                 self.pc + 1
             },
-            STACK_BINARY(op) => {
-                let rhs = self.pop()?;
-                let lhs = self.pop()?;
-                let res = op.apply_to(lhs, rhs)?;
-                self.stack.push(res);
+            UOp(op, dest, src) =>  {
+                let val = self.get_value(src)?;
+                let res = op.apply_to(val)?;
+                self.put_value(dest, res)?;
                 self.pc + 1
             },
-            STACK_UNARY(op) => {
-                let val = self.pop()?;
-                let res = op.apply_to(val)?;
-                self.stack.push(res);
+            BOp(op, dest, lhs, rhs) => {
+                let rhs_v = self.get_value(rhs)?;
+                let lhs_v = self.get_value(lhs)?;
+                let res = op.apply_to(lhs_v, rhs_v)?;
+                self.put_value(dest, res)?;
                 self.pc + 1
             },
             JUMP(label) => *self.get_label(label)?,
@@ -330,7 +330,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::I32(2)),
-            STACK_BINARY(BinaryOp::ADD),
+            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
@@ -341,7 +341,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::IPtr(0x7ab)),
             PUSHC(Value::I32(4)),
-            STACK_BINARY(BinaryOp::SUB),
+            BOp(BinaryOp::SUB, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0x7a7));
@@ -352,7 +352,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::F32(4.0)),
             PUSHC(Value::I32(4)),
-            STACK_BINARY(BinaryOp::ADD),
+            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
@@ -363,7 +363,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::I32(4)),
-            STACK_BINARY(BinaryOp::MUL),
+            BOp(BinaryOp::MUL, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
@@ -373,7 +373,7 @@ mod test {
     fn uniop_test_1() {
         let insts = vec![
             PUSHC(Value::I32(3)),
-            STACK_UNARY(UnaryOp::NEG),
+            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-3));
@@ -383,7 +383,7 @@ mod test {
     fn uniop_test_2() {
         let insts = vec![
             PUSHC(Value::F32(2.71828)),
-            STACK_UNARY(UnaryOp::NEG),
+            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::F32(-2.71828));
@@ -393,7 +393,7 @@ mod test {
     fn uniop_test_3() {
         let insts = vec![
             PUSHC(Value::Bool(false)),
-            STACK_UNARY(UnaryOp::NOT),
+            UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
@@ -403,7 +403,7 @@ mod test {
     fn uniop_test_4() {
         let insts = vec![
             PUSHC(Value::I32(0)),
-            STACK_UNARY(UnaryOp::NOT),
+            UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
@@ -413,7 +413,7 @@ mod test {
     fn uniop_test_5() {
         let insts = vec![
             PUSHC(Value::Void),
-            STACK_UNARY(UnaryOp::NOT),
+            UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
@@ -538,7 +538,7 @@ mod test {
             JUMP("label".to_string()),
             POP,
             PUSHC(Value::I32(2)),
-            STACK_UNARY(UnaryOp::NEG),
+            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 4);
@@ -563,7 +563,7 @@ mod test {
             JUMPS,
             POP,
             PUSHC(Value::Void),
-            STACK_UNARY(UnaryOp::NEG),
+            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
@@ -587,7 +587,7 @@ mod test {
             BRANCHONS(Value::Bool(true), "label".to_string()),
             POP,
             PUSHC(Value::Void),
-            STACK_UNARY(UnaryOp::NEG),
+            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
@@ -603,7 +603,7 @@ mod test {
             BRANCHONS(Value::Bool(false), "label".to_string()),
             POP,
             PUSHC(Value::I32(-1)),
-            STACK_UNARY(UnaryOp::NEG),
+            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
@@ -619,7 +619,7 @@ mod test {
             BRANCHONS(Value::I32(1), "label".to_string()),
             POP,
             PUSHC(Value::I32(-1)),
-            STACK_UNARY(UnaryOp::NEG),
+            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
@@ -633,9 +633,9 @@ mod test {
             PUSHC(Value::I32(2)),
             PUSHR(RegisterName::StackPointer),
             PUSHC(Value::I32(1)),
-            STACK_BINARY(BinaryOp::SUB),
+            BOp(BinaryOp::SUB, Loc::Stack, Loc::Stack, Loc::Stack),
             LOADFROM(Loc::Stack, Loc::Stack),
-            STACK_BINARY(BinaryOp::ADD),
+            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(4));
@@ -647,9 +647,9 @@ mod test {
             PUSHC(Value::I32(2)),
             PUSHC(Value::I32(1)),
             PUSHC(Value::I32(1)),
-            STACK_BINARY(BinaryOp::SUB),
+            BOp(BinaryOp::SUB, Loc::Stack, Loc::Stack, Loc::Stack),
             LOADFROM(Loc::Stack, Loc::Stack),
-            STACK_BINARY(BinaryOp::ADD),
+            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert!(thread.exec().is_err());
@@ -663,7 +663,7 @@ mod test {
             PUSHC(Value::I32(0)),
             PUSHC(Value::SPtr(0x1)),
             STORETO(Loc::Stack, Loc::Stack),
-            STACK_BINARY(BinaryOp::ADD),
+            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
         let mut thread = Thread::new(&insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(1));
