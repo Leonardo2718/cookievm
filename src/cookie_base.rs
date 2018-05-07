@@ -277,7 +277,7 @@ pub enum Instruction {
 
     JUMP(String),
     JUMPS,
-    JUMPO(Value),
+    // JUMPO(Value),
     BRANCHONS(Value, String),
 
     PRINTS,

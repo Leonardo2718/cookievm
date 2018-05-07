@@ -25,9 +25,11 @@ License:
 */
 
 use cookie_base::*;
-// use std::str::FromStr;
+use interpreter::*;
+use std::fmt;
 use std::str::Chars;
 use std::iter::Iterator;
+use std::collections::HashMap;
 
 // impl FromStr for Value {
 //     type Err = String;
@@ -54,6 +56,11 @@ use std::iter::Iterator;
 // }
 
 #[derive(Debug,Clone,PartialEq)]
+pub enum OpToken {
+
+}
+
+#[derive(Debug,Clone,PartialEq)]
 pub enum Token {
     Ident(String),
     Label(String),
@@ -62,9 +69,20 @@ pub enum Token {
     Address(usize),
     Char(char),
     Bool(bool),
+    Void,
+    SP,
+    FP,
+    PC,
+    R(u8),
     LParen,
     RParen,
     Dot,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 pub type TokenList = Vec<Token>;
@@ -135,15 +153,38 @@ impl<'a> Iterator for Lexer<'a> {
                         _ => None
                     };
                 }
+                Some(&'$') => {
+                    skip_n!(self.iter, 1);
+                    let mut s = String::new();
+                    match self.iter.clone().peekable().peek() {
+                        Some(c) if c.is_numeric() => {
+                            let is_gpr = |c:&char| c.is_numeric();
+                            eat_while!(self.iter, is_gpr, |c:&char| s.push(*c));
+                            return u8::from_str_radix(s.as_ref(), 10).ok().map(|i:u8| Token::R(i));
+                        },
+                        Some(c) if c.is_alphabetic() => {
+                            let is_reg = |c:&char| c.is_alphabetic();
+                            eat_while!(self.iter, is_reg, |c:&char| s.push(*c));
+                            return match s.as_ref() {
+                                 "sp" => Some(Token::SP),
+                                 "fp" => Some(Token::FP),
+                                 "pc" => Some(Token::PC),
+                                 _ => None
+                            }
+                        }
+                        _ => return None
+                    }
+                }
                 Some(c) if c.is_alphabetic() || c == &'_' => {
                     let mut s = String::new();
                     let is_ident = |c:&char| c.is_alphanumeric() || c == &'_';
                     eat_while!(self.iter.by_ref(), is_ident, |c:&char| s.push(*c));
-                    return match s.as_ref() {
+                    return match s.to_lowercase().as_ref() {
                         "true" => Some(Token::Bool(true)),
                         "false" => Some(Token::Bool(false)),
+                        "void" => Some(Token::Void),
                         _ => match peek!(self.iter) {
-                            Some(&':') => Some(Token::Label(s)),
+                            Some(&':') => { skip_n!(self.iter, 1); Some(Token::Label(s)) },
                             _ => Some(Token::Ident(s))
                         }
                     }
@@ -161,8 +202,9 @@ impl<'a> Iterator for Lexer<'a> {
                         _ => {
                             let is_num = |c:&char| c.is_digit(10);
                             eat_while!(self.iter.by_ref(), is_num, |c:&char| s.push(*c));
-                            match self.iter.next() {
+                            match self.iter.clone().peekable().peek() {
                                 Some('.') => {
+                                    skip_n!(self.iter,1);
                                     s.push('.');
                                     eat_while!(self.iter.by_ref(), is_num, |c:&char| s.push(*c));
                                     return s.clone().parse::<f32>().ok().map(|f:f32| Token::Float(f));
@@ -180,9 +222,165 @@ impl<'a> Iterator for Lexer<'a> {
     }
 }
 
+macro_rules! eat_token_ {
+    ($iter:expr, $expect:tt) => ({
+        let t = $iter.next();
+        match t {
+            Some(Token::$expect) => Ok(t.unwrap()),
+            Some(t) => Err(format!("Unexpected token: {}", t)),
+            None => Err(format!("Unexpected end of token stream"))
+        }
+    })
+}
+
+macro_rules! unexpected_token ( ($t:expr)  => (Err(format!("Unexpected token: {}", $t))) );
+macro_rules! unexpected_id    ( ($id:expr) => (Err(format!("Unexpected identifier: {}", $id))) );
+macro_rules! unexpected_end   ( ()         => {Err(format!("Unexpected end of token stream"))} );
+
+macro_rules! eat_token {
+    ($iter:expr, $expect:tt) => ({
+        let t = $iter.next();
+        match t {
+            Some(Token::$expect(v)) => Ok(v),
+            Some(t) => unexpected_token!(t),
+            None => unexpected_end!(),
+        }
+    })
+}
+
+fn parse_stack_op<'a>(lexer: &mut Lexer<'a>) -> Result<Instruction> {
+    use cookie_base::Instruction::*;
+    use cookie_base::UOp::*;
+    use cookie_base::BOp::*;
+    let id = eat_token!(lexer, Ident)?;
+    let inst = match id.to_lowercase().as_ref() {
+        "neg" => STACK_UNARY(NEG),
+        "not" => STACK_UNARY(NOT),
+        "add" => STACK_BINARY(ADD),
+        "sub" => STACK_BINARY(SUB),
+        "mul" => STACK_BINARY(MUL),
+        "div" => STACK_BINARY(DIV),
+        "mod" => STACK_BINARY(MOD),
+        "eq" => STACK_BINARY(EQ),
+        "lt" => STACK_BINARY(LT),
+        "le" => STACK_BINARY(LE),
+        "gt" => STACK_BINARY(GT),
+        "ge" => STACK_BINARY(GE),
+        "and" => STACK_BINARY(AND),
+        "or" => STACK_BINARY(OR),
+        "xor" => STACK_BINARY(XOR),
+        id => return unexpected_id!(id)
+    };
+    Ok(inst)
+}
+
+fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<Value> {
+    macro_rules! parse_as (
+        ($id:tt, $val:tt) => ({
+            eat_token_!(lexer, LParen)?;
+            let v = eat_token!(lexer, $id)?;
+            eat_token_!(lexer, RParen)?;
+            Ok(Value::$val(v))
+        })
+    );
+
+    match lexer.next().clone() {
+        Some(Token::Void) => Ok(Value::Void),
+        Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
+            "i32" => parse_as!(Integer, I32),
+            "f32" => parse_as!(Float, F32),
+            "char" => parse_as!(Char, Char),
+            "bool" => parse_as!(Bool, Bool),
+            "iptr" => parse_as!(Address, IPtr),
+            "sptr" => parse_as!(Address, SPtr),
+            id => return unexpected_id!(id)
+        },
+        Some(t) => return unexpected_token!(t),
+        None => return unexpected_end!()
+    }
+}
+
+fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<RegisterName> {
+    match lexer.next().clone() {
+        Some(Token::SP) => Ok(RegisterName::StackPointer),
+        Some(Token::FP) => Ok(RegisterName::FramePointer),
+        Some(Token::PC) => Ok(RegisterName::ProgramCounter),
+        Some(Token::R(i)) => Ok(RegisterName::R(i)),
+        Some(t) => unexpected_token!(t),
+        None => unexpected_end!()
+    }
+}
+
+fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<Type> {
+    match lexer.next().clone() {
+        Some(Token::Void) => Ok(Type::Void),
+        Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
+            "i32" => Ok(Type::I32),
+            "f32" => Ok(Type::F32),
+            "char" => Ok(Type::Char),
+            "bool" => Ok(Type::Bool),
+            "iptr" => Ok(Type::IPtr),
+            "sptr" => Ok(Type::SPtr),
+            id => return unexpected_id!(id),
+        }
+        Some(t) => return unexpected_token!(t),
+        None => return unexpected_end!(),
+    }
+}
+
+pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> {
+    use cookie_base::Instruction::*;
+
+    let mut insts: InstructionList = Vec::new();
+    let mut labels: LabelTable = HashMap::new();
+
+    loop {
+        match lexer.next().clone() {
+            Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
+                "s" => {
+                    eat_token_!(lexer, Dot)?;
+                    let inst = parse_stack_op(&mut lexer)?;
+                    insts.push(inst);
+                },
+                "pushc" => {
+                    let val = parse_value(&mut lexer)?;
+                    insts.push(PUSHC(val));
+                },
+                "pushr" => {
+                    let reg = parse_register(&mut lexer)?;
+                    insts.push(PUSHR(reg));
+                },
+                "popr" => {
+                    let reg = parse_register(&mut lexer)?;
+                    insts.push(POPR(reg));
+                },
+                "pop" => { insts.push(POP); },
+                "loadats" => { insts.push(LOADATS); },
+                "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(l)); },
+                "jumps" => { insts.push(JUMPS); },
+                "branchons" => {
+                    let v = parse_value(&mut lexer)?;
+                    let l = eat_token!(lexer, Ident)?;
+                    insts.push(BRANCHONS(v, l));
+                },
+                "prints" => { insts.push(PRINTS); }
+                "reads" => { let t = parse_type(&mut lexer)?; insts.push(READS(t)); }
+                "halt" => { insts.push(HALT); }
+                id => return unexpected_id!(id)
+            },
+            Some(Token::Label(l)) => { labels.insert(l.to_string(), insts.len()); },
+            Some(t) => return unexpected_token!(t),
+            None => break,
+        };
+    }
+
+    return Ok((insts, labels));
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use cookie_base::Instruction::*;
 
     #[test]
     fn lexer_test_1() {
@@ -325,5 +523,246 @@ mod test {
         let mut lexer = Lexer::new(r"'\n' ; 0x123".chars());
         assert_eq!(lexer.next().unwrap(), Token::Char('\n'));
         assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_21() {
+        let mut lexer = Lexer::new("Void".chars());
+        assert_eq!(lexer.next().unwrap(), Token::Void);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_22() {
+        let mut lexer = Lexer::new("I32(3)".chars());
+        assert_eq!(lexer.next().unwrap(), Token::Ident("I32".to_string()));
+        assert_eq!(lexer.next().unwrap(), Token::LParen);
+        assert_eq!(lexer.next().unwrap(), Token::Integer(3));
+        assert_eq!(lexer.next().unwrap(), Token::RParen);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_23() {
+        let mut lexer = Lexer::new("$sp".chars());
+        assert_eq!(lexer.next().unwrap(), Token::SP);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_24() {
+        let mut lexer = Lexer::new("$fp".chars());
+        assert_eq!(lexer.next().unwrap(), Token::FP);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_25() {
+        let mut lexer = Lexer::new("$pc".chars());
+        assert_eq!(lexer.next().unwrap(), Token::PC);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_26() {
+        let mut lexer = Lexer::new("$0".chars());
+        assert_eq!(lexer.next().unwrap(), Token::R(0));
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_27() {
+        let mut lexer = Lexer::new(" foo L1: bar".chars());
+        assert_eq!(lexer.next().unwrap(), Token::Ident("foo".to_string()));
+        assert_eq!(lexer.next().unwrap(), Token::Label("L1".to_string()));
+        assert_eq!(lexer.next().unwrap(), Token::Ident("bar".to_string()));
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_28() {
+        let mut lexer = Lexer::new("L1:L2:".chars());
+        assert_eq!(lexer.next().unwrap(), Token::Label("L1".to_string()));
+        assert_eq!(lexer.next().unwrap(), Token::Label("L2".to_string()));
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn parse_stack_op_test_1() {
+        let inst = parse_stack_op(&mut Lexer::new("Add".chars())).unwrap();
+        assert_eq!(inst, Instruction::STACK_BINARY(BOp::ADD));
+    }
+
+    #[test]
+    fn parse_stack_op_test_2() {
+        let inst = parse_stack_op(&mut Lexer::new("EQ".chars())).unwrap();
+        assert_eq!(inst, Instruction::STACK_BINARY(BOp::EQ));
+    }
+
+    #[test]
+    fn parse_stack_op_test_3() {
+        let inst = parse_stack_op(&mut Lexer::new("NOT".chars())).unwrap();
+        assert_eq!(inst, Instruction::STACK_UNARY(UOp::NOT));
+    }
+
+    #[test]
+    fn parse_stack_op_test_4() {
+        assert!(parse_stack_op(&mut Lexer::new("foo".chars())).is_err());
+    }
+
+    #[test]
+    fn parse_value_test_1() {
+        let val = parse_value(&mut Lexer::new("I32(3)".chars())).unwrap();
+        assert_eq!(val, Value::I32(3));
+    }
+
+    #[test]
+    fn parse_value_test_2() {
+        let val = parse_value(&mut Lexer::new("F32(2.71828)".chars())).unwrap();
+        assert_eq!(val, Value::F32(2.71828));
+    }
+
+    #[test]
+    fn parse_value_test_3() {
+        let val = parse_value(&mut Lexer::new(r"Char('\\')".chars())).unwrap();
+        assert_eq!(val, Value::Char('\\'));
+    }
+
+    #[test]
+    fn parse_value_test_4() {
+        let val = parse_value(&mut Lexer::new("Bool(False)".chars())).unwrap();
+        assert_eq!(val, Value::Bool(false));
+    }
+
+    #[test]
+    fn parse_value_test_5() {
+        let val = parse_value(&mut Lexer::new("IPtr(0xabc)".chars())).unwrap();
+        assert_eq!(val, Value::IPtr(0xabc));
+    }
+
+    #[test]
+    fn parse_value_test_6() {
+        let val = parse_value(&mut Lexer::new("SPtr(0x123)".chars())).unwrap();
+        assert_eq!(val, Value::SPtr(0x123));
+    }
+
+    #[test]
+    fn parse_value_test_7() {
+        let val = parse_value(&mut Lexer::new("Void".chars())).unwrap();
+        assert_eq!(val, Value::Void);
+    }
+
+    #[test]
+    fn parse_value_test_8() {
+        assert!(parse_value(&mut Lexer::new("foo".chars())).is_err());
+    }
+
+    #[test]
+    fn parse_value_test_9() {
+        assert!(parse_value(&mut Lexer::new("I32(2.0)".chars())).is_err());
+    }
+
+    #[test]
+    fn parse_value_test_10() {
+        assert!(parse_value(&mut Lexer::new("F32(4)".chars())).is_err());
+    }
+
+    #[test]
+    fn parse_value_test_11() {
+        assert!(parse_value(&mut Lexer::new("Char(c)".chars())).is_err());
+    }
+
+    #[test]
+    fn parse_value_test_12() {
+        assert!(parse_value(&mut Lexer::new("Bool(foo)".chars())).is_err());
+    }
+
+    #[test]
+    fn parse_value_test_13() {
+        assert!(parse_value(&mut Lexer::new("I32()".chars())).is_err());
+    }
+
+    #[test]
+    fn parse_value_test_14() {
+        assert!(parse_value(&mut Lexer::new("F32 3.14".chars())).is_err());
+    }
+
+    #[test]
+    fn parse_register_test_1() {
+        let reg = parse_register(&mut Lexer::new("$sp".chars())).unwrap();
+        assert_eq!(reg, RegisterName::StackPointer);
+    }
+
+    #[test]
+    fn parse_register_test_2() {
+        let reg = parse_register(&mut Lexer::new("$fp".chars())).unwrap();
+        assert_eq!(reg, RegisterName::FramePointer);
+    }
+
+    #[test]
+    fn parse_register_test_3() {
+        let reg = parse_register(&mut Lexer::new("$pc".chars())).unwrap();
+        assert_eq!(reg, RegisterName::ProgramCounter);
+    }
+
+    #[test]
+    fn parse_register_test_4() {
+        let reg = parse_register(&mut Lexer::new("$7".chars())).unwrap();
+        assert_eq!(reg, RegisterName::R(7));
+    }
+
+    #[test]
+    fn parse_type_test_1() {
+        let t = parse_type(&mut Lexer::new("I32".chars())).unwrap();
+        assert_eq!(t, Type::I32);
+    }
+
+    #[test]
+    fn parse_type_test_2() {
+        let t = parse_type(&mut Lexer::new("Bool".chars())).unwrap();
+        assert_eq!(t, Type::Bool);
+    }
+
+    #[test]
+    fn parse_type_test_3() {
+        let t = parse_type(&mut Lexer::new("Void".chars())).unwrap();
+        assert_eq!(t, Type::Void);
+    }
+
+    #[test]
+    fn parse_type_test_4() {
+        assert!(parse_type(&mut Lexer::new("bar".chars())).is_err());
+    }
+
+    #[test]
+    fn parser_test_1() {
+        let (insts, labels) = parse(Lexer::new("pushc I32(3)".chars())).unwrap();
+        assert!(labels.is_empty());
+        let mut iter = insts.iter();
+        assert_eq!(*iter.next().unwrap(), PUSHC(Value::I32(3)));
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn parser_test_2() {
+        let (insts, labels) = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) s.add".chars())).unwrap();
+        assert!(labels.is_empty());
+        let mut iter = insts.iter();
+        assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(3.1)));
+        assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(4.2)));
+        assert_eq!(*iter.next().unwrap(), STACK_BINARY(BOp::ADD));
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn parsre_test_3() {
+        let (insts, labels) = parse(Lexer::new("jump L1 L1: pushc Bool(true)".chars())).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert!(labels.contains_key("L1"));
+        assert_eq!(*labels.get("L1").unwrap(), 1 as usize);
+        let mut iter = insts.iter();
+        assert_eq!(*iter.next().unwrap(), JUMP("L1".to_string()));
+        assert_eq!(*iter.next().unwrap(), PUSHC(Value::Bool(true)));
+        assert!(iter.next().is_none());
     }
 }
