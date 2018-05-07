@@ -24,6 +24,11 @@ License:
 
 */
 
+use std::env::args;
+use std::io;
+use std::io::prelude::*;
+use std::fs::File;
+use std::io::BufReader;
 use std::collections::HashMap;
 
 mod cookie_base;
@@ -32,36 +37,21 @@ mod parser;
 
 fn main() {
     use cookie_base::*;
-    use cookie_base::Instruction::*;
     use interpreter::*;
-    let instructions: InstructionList = vec![
-        PUSHC(Value::I32(1)),
-        PUSHC(Value::I32(2)),
-        STACK_BINARY(BOp::ADD),
-        STACK_UNARY(UOp::NEG),
-        PRINTS,
-        PUSHC(Value::Char('\n')),
-        PRINTS,
-        PUSHC(Value::Char('a')),
-        PRINTS,
-        PUSHC(Value::Char('b')),
-        PRINTS,
-        PUSHC(Value::Char('c')),
-        PRINTS,
-        PUSHC(Value::Char('\n')),
-        PRINTS,
-        PUSHC(Value::IPtr(0x15a)),
-        PRINTS,
-        PUSHC(Value::Char('\n')),
-        PRINTS,
-        PUSHC(Value::SPtr(0xa5f)),
-        PRINTS,
-        PUSHC(Value::Char('\n')),
-        PRINTS,
-    ];
-    let mut thread = Thread::new(&instructions, HashMap::new());
+    use parser::*;
+
+    let fpath = args().nth(1).ok_or("Usage: cookie PATH").unwrap();
+    let f = File::open(fpath).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut source = String::new();
+    reader.read_to_string(&mut source);
+
+    let (instructions, labels) = parse(Lexer::new(source.chars())).unwrap();
+
+    let mut thread = Thread::new(&instructions, labels);
     match thread.exec() {
-        Ok(_) => {},
-        Err(msg) => println!("{}", msg)
+        Ok(Some(v)) => println!("\n-----\n{}", v),
+        Ok(None) => println!("\n-----"),
+        Err(msg) => println!("{}", msg),
     }
 }
