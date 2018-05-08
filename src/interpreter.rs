@@ -122,7 +122,17 @@ impl<'a> Thread<'a> {
                 let condition = expect_value!(cookie::BinaryOp::EQ.apply_to(*imm, val)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
                 if condition { *self.get_label(label)? } else { self.pc + 1 }
             },
-            PRINT(src) => { print!("{}", self.get_value(src)?); self.pc + 1 },
+            PRINT(src) => {
+                use self::cookie::Value::*;
+                match self.get_value(src)? {
+                    Char(c) => print!("{}", c),
+                    I32(i) => print!("{}", i),
+                    F32(f) => print!("{}", f),
+                    Bool(b) => print!("{}", b),
+                    v => print!("{}", v)
+                };
+                self.pc + 1
+            },
             EXIT => { self.instructions.len() } // setting pc to past the end will force termination
             _ => panic!("Unimplemented instruction: {:?}", inst)
         };
