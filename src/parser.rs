@@ -100,7 +100,7 @@ macro_rules! eat_while {
 
 macro_rules! skip_n {
     ($iter:expr, $count:expr) => (
-        for i in 0..$count { $iter.next(); }
+        for _ in 0..$count { $iter.next(); }
     )
 }
 
@@ -248,27 +248,40 @@ macro_rules! eat_token {
     })
 }
 
-fn parse_stack_op<'a>(lexer: &mut Lexer<'a>) -> Result<Instruction> {
+fn parse_vinst<'a>(lexer: &mut Lexer<'a>, loc: Loc) -> Result<Instruction> {
     use cookie_base::Instruction::*;
     use cookie_base::UnaryOp::*;
     use cookie_base::BinaryOp::*;
     let id = eat_token!(lexer, Ident)?;
     let inst = match id.to_lowercase().as_ref() {
-        "neg" => UOp(NEG, Loc::Stack, Loc::Stack),
-        "not" => UOp(NOT, Loc::Stack, Loc::Stack),
-        "add" => BOp(ADD, Loc::Stack, Loc::Stack, Loc::Stack),
-        "sub" => BOp(SUB, Loc::Stack, Loc::Stack, Loc::Stack),
-        "mul" => BOp(MUL, Loc::Stack, Loc::Stack, Loc::Stack),
-        "div" => BOp(DIV, Loc::Stack, Loc::Stack, Loc::Stack),
-        "mod" => BOp(MOD, Loc::Stack, Loc::Stack, Loc::Stack),
-        "eq" => BOp(EQ, Loc::Stack, Loc::Stack, Loc::Stack),
-        "lt" => BOp(LT, Loc::Stack, Loc::Stack, Loc::Stack),
-        "le" => BOp(LE, Loc::Stack, Loc::Stack, Loc::Stack),
-        "gt" => BOp(GT, Loc::Stack, Loc::Stack, Loc::Stack),
-        "ge" => BOp(GE, Loc::Stack, Loc::Stack, Loc::Stack),
-        "and" => BOp(AND, Loc::Stack, Loc::Stack, Loc::Stack),
-        "or" => BOp(OR, Loc::Stack, Loc::Stack, Loc::Stack),
-        "xor" => BOp(XOR, Loc::Stack, Loc::Stack, Loc::Stack),
+        "neg" => UOp(NEG, loc, loc),
+        "not" => UOp(NOT, loc, loc),
+        "add" => BOp(ADD, loc, loc, loc),
+        "sub" => BOp(SUB, loc, loc, loc),
+        "mul" => BOp(MUL, loc, loc, loc),
+        "div" => BOp(DIV, loc, loc, loc),
+        "mod" => BOp(MOD, loc, loc, loc),
+        "eq" => BOp(EQ, loc, loc, loc),
+        "lt" => BOp(LT, loc, loc, loc),
+        "le" => BOp(LE, loc, loc, loc),
+        "gt" => BOp(GT, loc, loc, loc),
+        "ge" => BOp(GE, loc, loc, loc),
+        "and" => BOp(AND, loc, loc, loc),
+        "or" => BOp(OR, loc, loc, loc),
+        "xor" => BOp(XOR, loc, loc, loc),
+        "loadfrom" => LOADFROM(loc, loc),
+        "storeto" => STORETO(loc, loc),
+        "djump" => DJUMP(loc),
+        "branchon" => {
+            let v = parse_value(lexer)?;
+            let l = eat_token!(lexer, Ident)?;
+            BRANCHON(v, l, loc)
+        },
+        "print" => PRINT(loc),
+        "read" => {
+            let t = parse_type(lexer)?;
+            READ(t, loc)
+        },
         id => return unexpected_id!(id)
     };
     Ok(inst)
@@ -339,7 +352,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
             Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
                 "s" => {
                     eat_token_!(lexer, Dot)?;
-                    let inst = parse_stack_op(&mut lexer)?;
+                    let inst = parse_vinst(&mut lexer, Loc::Stack)?;
                     insts.push(inst);
                 },
                 "pushc" => {
@@ -355,17 +368,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
                     insts.push(POPR(reg));
                 },
                 "pop" => { insts.push(POP); },
-                "loadfrom" => { insts.push(LOADFROM(Loc::Stack, Loc::Stack)); },
-                "storeto" => { insts.push(STORETO(Loc::Stack, Loc::Stack)); },
                 "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(l)); },
-                "djump" => { insts.push(DJUMP(Loc::Stack)); },
-                "branchon" => {
-                    let v = parse_value(&mut lexer)?;
-                    let l = eat_token!(lexer, Ident)?;
-                    insts.push(BRANCHON(v, l, Loc::Stack));
-                },
-                "print" => { insts.push(PRINT(Loc::Stack)); }
-                "read" => { let t = parse_type(&mut lexer)?; insts.push(READ(t, Loc::Stack)); }
                 "exit" => { insts.push(EXIT); }
                 id => return unexpected_id!(id)
             },
@@ -589,26 +592,26 @@ mod test {
     }
 
     #[test]
-    fn parse_stack_op_test_1() {
-        let inst = parse_stack_op(&mut Lexer::new("Add".chars())).unwrap();
+    fn parse_vinst_test_1() {
+        let inst = parse_vinst(&mut Lexer::new("Add".chars()), Loc::Stack).unwrap();
         assert_eq!(inst, Instruction::BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack));
     }
 
     #[test]
-    fn parse_stack_op_test_2() {
-        let inst = parse_stack_op(&mut Lexer::new("EQ".chars())).unwrap();
+    fn parse_vinst_test_2() {
+        let inst = parse_vinst(&mut Lexer::new("EQ".chars()), Loc::Stack).unwrap();
         assert_eq!(inst, Instruction::BOp(BinaryOp::EQ, Loc::Stack, Loc::Stack, Loc::Stack));
     }
 
     #[test]
-    fn parse_stack_op_test_3() {
-        let inst = parse_stack_op(&mut Lexer::new("NOT".chars())).unwrap();
+    fn parse_vinst_test_3() {
+        let inst = parse_vinst(&mut Lexer::new("NOT".chars()), Loc::Stack).unwrap();
         assert_eq!(inst, Instruction::UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack));
     }
 
     #[test]
-    fn parse_stack_op_test_4() {
-        assert!(parse_stack_op(&mut Lexer::new("foo".chars())).is_err());
+    fn parse_vinst_test_4() {
+        assert!(parse_vinst(&mut Lexer::new("foo".chars()), Loc::Stack).is_err());
     }
 
     #[test]

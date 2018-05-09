@@ -25,7 +25,7 @@
 ; this program should print nothing
     jump L1
     pushc char('x')
-    print
+    s.print
 L1: exit
     pushc char('x')
-    print
+    s.print
