@@ -35,11 +35,13 @@ use std::collections::HashMap;
 
 mod cookie_base;
 mod interpreter;
+mod lexer;
 mod parser;
 
 fn main() {
     use cookie_base::*;
     use interpreter::*;
+    use lexer::*;
     use parser::*;
 
     let fpath = args().nth(1).ok_or("Usage: cookie PATH").unwrap();
