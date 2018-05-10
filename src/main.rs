@@ -24,6 +24,8 @@ License:
 
 */
 
+#![feature(transpose_result)]
+
 use std::env::args;
 use std::io;
 use std::io::prelude::*;

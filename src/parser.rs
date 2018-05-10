@@ -248,45 +248,6 @@ macro_rules! eat_token {
     })
 }
 
-fn parse_vinst<'a>(lexer: &mut Lexer<'a>, loc: Loc) -> Result<Instruction> {
-    use cookie_base::Instruction::*;
-    use cookie_base::UnaryOp::*;
-    use cookie_base::BinaryOp::*;
-    let id = eat_token!(lexer, Ident)?;
-    let inst = match id.to_lowercase().as_ref() {
-        "neg" => UOp(NEG, loc, loc),
-        "not" => UOp(NOT, loc, loc),
-        "add" => BOp(ADD, loc, loc, loc),
-        "sub" => BOp(SUB, loc, loc, loc),
-        "mul" => BOp(MUL, loc, loc, loc),
-        "div" => BOp(DIV, loc, loc, loc),
-        "mod" => BOp(MOD, loc, loc, loc),
-        "eq" => BOp(EQ, loc, loc, loc),
-        "lt" => BOp(LT, loc, loc, loc),
-        "le" => BOp(LE, loc, loc, loc),
-        "gt" => BOp(GT, loc, loc, loc),
-        "ge" => BOp(GE, loc, loc, loc),
-        "and" => BOp(AND, loc, loc, loc),
-        "or" => BOp(OR, loc, loc, loc),
-        "xor" => BOp(XOR, loc, loc, loc),
-        "loadfrom" => LOADFROM(loc, loc),
-        "storeto" => STORETO(loc, loc),
-        "djump" => DJUMP(loc),
-        "branchon" => {
-            let v = parse_value(lexer)?;
-            let l = eat_token!(lexer, Ident)?;
-            BRANCHON(v, l, loc)
-        },
-        "print" => PRINT(loc),
-        "read" => {
-            let t = parse_type(lexer)?;
-            READ(t, loc)
-        },
-        id => return unexpected_id!(id)
-    };
-    Ok(inst)
-}
-
 fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<Value> {
     macro_rules! parse_as (
         ($id:tt, $val:tt) => ({
@@ -341,6 +302,140 @@ fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<Type> {
     }
 }
 
+type LocParser<'a> = Fn(&mut Lexer<'a>) -> Result<Loc>;
+
+/*
+This function acts as a continuation for parsing a register location
+in a v-instruction.
+*/
+fn parse_regloc<'a>(lexer: &mut Lexer<'a>) -> Result<Loc> {
+    Ok(Loc::Reg(parse_register(lexer)?))
+}
+
+/*
+This function is intended to mirror `parse_regloc`, acting as a
+continuation for parsing a stack location in a v-instruction.
+Since stack locactions are implicit, not tokens are ever
+consumed on invocation.
+*/
+fn parse_stackloc<'a>(lexer: &mut Lexer<'a>) -> Result<Loc> {
+    Ok(Loc::Stack)
+}
+
+/*
+Helper for parsing an identifier as a v-instruction that takes
+one location argument. The identifier is converted to lowercase
+and matched against the names of such v-instruction. If a match
+is found, the matching instruction is returned, consuming the
+tokens necessary to completely parse the instruction. If no
+match is found, None is returned and no tokens are consumed.
+*/
+fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<Option<Instruction>> {
+    use cookie_base::Instruction::*;
+    let inst = match ident.to_lowercase().as_ref() {
+        "djump" => {
+            let loc = parse_loc(lexer)?;
+            Some(DJUMP(loc))
+        },
+        "branchon" => {
+            let v = parse_value(lexer)?;
+            let loc = parse_loc(lexer)?;
+            let l = eat_token!(lexer, Ident)?;
+            Some(BRANCHON(v, l, loc))
+        },
+        "print" => {
+            let loc = parse_loc(lexer)?;
+            Some(PRINT(loc))
+        },
+        "read" => {
+            let t = parse_type(lexer)?;
+            let loc = parse_loc(lexer)?;
+            Some(READ(t, loc))
+        },
+        _ => None
+    };
+    Ok(inst)
+}
+
+/*
+Helper for parsing an identifier as a v-instruction that takes
+two location argument.
+*/
+fn parse_as_vinst2<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>) -> Result<Option<Instruction>> {
+    use cookie_base::Instruction::*;
+    use cookie_base::UnaryOp::*;
+
+    macro_rules! gen_uop {
+        ($op:ident) => ({
+            let loc1 = parse_loc1(lexer)?;
+            let loc2 = parse_loc2(lexer)?;
+            Some(UOp($op, loc1, loc2))
+        })
+    }
+
+    let inst = match ident.to_lowercase().as_ref() {
+        "neg" => gen_uop!(NEG),
+        "not" => gen_uop!(NOT),
+        "loadfrom" => {
+            let loc1 = parse_loc1(lexer)?;
+            let loc2 = parse_loc2(lexer)?;
+            Some(LOADFROM(loc1, loc2))
+        },
+        "storeto" => {
+            let loc1 = parse_loc1(lexer)?;
+            let loc2 = parse_loc2(lexer)?;
+            Some(STORETO(loc1, loc2))
+        },
+        _ => None
+    };
+    Ok(inst)
+}
+
+/*
+Helper for parsing an identifier as a v-instruction that takes
+three location arguments.
+*/
+fn parse_as_vinst3<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>, parse_loc3: &LocParser<'a>) -> Result<Option<Instruction>> {
+    use cookie_base::Instruction::*;
+    use cookie_base::UnaryOp::*;
+    use cookie_base::BinaryOp::*;
+
+    macro_rules! gen_bop {
+        ($op:ident) => ({
+            let loc1 = parse_loc1(lexer)?;
+            let loc2 = parse_loc2(lexer)?;
+            let loc3 = parse_loc3(lexer)?;
+            Some(BOp($op, loc1, loc2, loc3))
+        })
+    }
+
+    let inst = match ident.to_lowercase().as_ref() {
+        "add" => gen_bop!(ADD),
+        "sub" => gen_bop!(SUB),
+        "mul" => gen_bop!(MUL),
+        "div" => gen_bop!(DIV),
+        "mod" => gen_bop!(MOD),
+        "eq" => gen_bop!(EQ),
+        "lt" => gen_bop!(LT),
+        "le" => gen_bop!(LE),
+        "gt" => gen_bop!(GT),
+        "ge" => gen_bop!(GE),
+        "and" => gen_bop!(AND),
+        "or" => gen_bop!(OR),
+        "xor" => gen_bop!(XOR),
+        _ => None
+    };
+    Ok(inst)
+}
+
+fn parse_vinst<'a>(lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<Instruction> {
+    let id = eat_token!(lexer, Ident)?;
+    parse_as_vinst1(&id, lexer, parse_loc).transpose()
+        .or_else(|| parse_as_vinst2(&id, lexer, parse_loc, parse_loc).transpose())
+        .or_else(|| parse_as_vinst3(&id, lexer, parse_loc, parse_loc, parse_loc).transpose())
+        .unwrap_or(unexpected_id!(id))
+}
+
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> {
     use cookie_base::Instruction::*;
 
@@ -352,7 +447,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
             Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
                 "s" => {
                     eat_token_!(lexer, Dot)?;
-                    let inst = parse_vinst(&mut lexer, Loc::Stack)?;
+                    let inst = parse_vinst(&mut lexer, &parse_stackloc)?;
                     insts.push(inst);
                 },
                 "pushc" => {
@@ -593,25 +688,25 @@ mod test {
 
     #[test]
     fn parse_vinst_test_1() {
-        let inst = parse_vinst(&mut Lexer::new("Add".chars()), Loc::Stack).unwrap();
+        let inst = parse_vinst(&mut Lexer::new("Add".chars()), &parse_stackloc).unwrap();
         assert_eq!(inst, Instruction::BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_vinst_test_2() {
-        let inst = parse_vinst(&mut Lexer::new("EQ".chars()), Loc::Stack).unwrap();
+        let inst = parse_vinst(&mut Lexer::new("EQ".chars()), &parse_stackloc).unwrap();
         assert_eq!(inst, Instruction::BOp(BinaryOp::EQ, Loc::Stack, Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_vinst_test_3() {
-        let inst = parse_vinst(&mut Lexer::new("NOT".chars()), Loc::Stack).unwrap();
+        let inst = parse_vinst(&mut Lexer::new("NOT".chars()), &parse_stackloc).unwrap();
         assert_eq!(inst, Instruction::UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_vinst_test_4() {
-        assert!(parse_vinst(&mut Lexer::new("foo".chars()), Loc::Stack).is_err());
+        assert!(parse_vinst(&mut Lexer::new("foo".chars()), &parse_stackloc).is_err());
     }
 
     #[test]
