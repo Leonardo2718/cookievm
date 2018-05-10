@@ -32,7 +32,7 @@ use std::collections::HashMap;
 
 macro_rules! eat_token_ {
     ($iter:expr, $expect:tt) => ({
-        let t = $iter.next();
+        let t = $iter.next().transpose()?;
         match t {
             Some(Token::$expect) => Ok(t.unwrap()),
             Some(t) => Err(format!("Unexpected token: {}", t)),
@@ -47,7 +47,7 @@ macro_rules! unexpected_end   ( ()         => {Err(format!("Unexpected end of to
 
 macro_rules! eat_token {
     ($iter:expr, $expect:tt) => ({
-        let t = $iter.next();
+        let t = $iter.next().transpose()?;
         match t {
             Some(Token::$expect(v)) => Ok(v),
             Some(t) => unexpected_token!(t),
@@ -66,7 +66,7 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<Value> {
         })
     );
 
-    match lexer.next().clone() {
+    match lexer.next().clone().transpose()? {
         Some(Token::Void) => Ok(Value::Void),
         Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
             "i32" => parse_as!(Integer, I32),
@@ -83,7 +83,7 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<Value> {
 }
 
 fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<RegisterName> {
-    match lexer.next().clone() {
+    match lexer.next().transpose()? {
         Some(Token::SP) => Ok(RegisterName::StackPointer),
         Some(Token::FP) => Ok(RegisterName::FramePointer),
         Some(Token::PC) => Ok(RegisterName::ProgramCounter),
@@ -94,7 +94,7 @@ fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<RegisterName> {
 }
 
 fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<Type> {
-    match lexer.next().clone() {
+    match lexer.next().transpose()? {
         Some(Token::Void) => Ok(Type::Void),
         Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
             "i32" => Ok(Type::I32),
@@ -250,7 +250,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
     let mut labels: LabelTable = HashMap::new();
 
     loop {
-        match lexer.next().clone() {
+        match lexer.next().transpose()? {
             Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
                 "s" => {
                     eat_token_!(lexer, Dot)?;
