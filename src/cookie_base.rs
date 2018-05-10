@@ -235,8 +235,6 @@ pub enum UnaryOp {
 impl UnaryOp {
     pub fn apply_to(&self, val: Value) -> Result<Value> {
         let apply_err = Err(format!("Cannot apply {} operation to {}", self, val));
-        let apply_err_1 = apply_err.clone();
-        let apply_err_2 = apply_err.clone();
         match self {
             UnaryOp::NEG => apply_err
                 .or_else(apply_unary!(I32, val, I32, -))
@@ -244,7 +242,6 @@ impl UnaryOp {
             UnaryOp::NOT => apply_err
                 .or_else(apply_unary!(Bool, val, Bool, !))
                 .or_else(apply_unary!(I32, val, I32, !)),
-            _ => apply_err
         }
     }
 }

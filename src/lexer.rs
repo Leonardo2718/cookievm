@@ -24,7 +24,6 @@ License:
 
 */
 
-use interpreter::*;
 use std::fmt;
 use std::iter::Iterator;
 use std::str::Chars;
@@ -58,8 +57,6 @@ impl fmt::Display for Token {
         write!(f, "{:?}", self)
     }
 }
-
-pub type TokenList = Vec<Token>;
 
 macro_rules! eat_while {
     ($iter:expr, $pred:expr, $eater:expr) => (

@@ -126,7 +126,7 @@ continuation for parsing a stack location in a v-instruction.
 Since stack locactions are implicit, not tokens are ever
 consumed on invocation.
 */
-fn parse_stackloc<'a>(lexer: &mut Lexer<'a>) -> Result<Loc> {
+fn parse_stackloc<'a>(_: &mut Lexer<'a>) -> Result<Loc> {
     Ok(Loc::Stack)
 }
 
@@ -205,7 +205,6 @@ three location arguments.
 */
 fn parse_as_vinst3<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>, parse_loc3: &LocParser<'a>) -> Result<Option<Instruction>> {
     use cookie_base::Instruction::*;
-    use cookie_base::UnaryOp::*;
     use cookie_base::BinaryOp::*;
 
     macro_rules! gen_bop {

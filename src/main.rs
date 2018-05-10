@@ -27,11 +27,9 @@ License:
 #![feature(transpose_result)]
 
 use std::env::args;
-use std::io;
 use std::io::prelude::*;
 use std::fs::File;
 use std::io::BufReader;
-use std::collections::HashMap;
 
 mod cookie_base;
 mod interpreter;
@@ -39,7 +37,6 @@ mod lexer;
 mod parser;
 
 fn main() {
-    use cookie_base::*;
     use interpreter::*;
     use lexer::*;
     use parser::*;
@@ -48,7 +45,7 @@ fn main() {
     let f = File::open(fpath).unwrap();
     let mut reader = BufReader::new(f);
     let mut source = String::new();
-    reader.read_to_string(&mut source);
+    reader.read_to_string(&mut source).unwrap(); // expect read to succeed
 
     let (instructions, labels) = parse(Lexer::new(source.chars())).unwrap();
 
