@@ -90,14 +90,14 @@ impl<'a> Thread<'a> {
             POP => { self.pop()?; self.pc + 1 },
             LOADFROM(dest, src) => {
                 let addr = expect_value!(self.get_value(src)?, SPtr, "Cannot load from non-SPtr value {bad_value}")?;
-                let val = self.stack[addr];
+                let val = self.stack[addr - 1];
                 self.put_value(dest, val)?;
                 self.pc + 1
             },
             STORETO(dest, src) => {
                 let addr = expect_value!(self.get_value(dest)?, SPtr, "Cannot load from non-SPtr value {bad_value}")?;
                 let val = self.get_value(src)?;
-                self.stack[addr] = val;
+                self.stack[addr - 1] = val;
                 self.pc + 1
             },
             UOp(op, dest, src) =>  {
@@ -140,33 +140,15 @@ impl<'a> Thread<'a> {
     }
 
     fn do_pushr(&mut self, reg: &cookie::RegisterName) -> Result<(), String> {
-        use self::cookie::Value;
-        use self::cookie::RegisterName;
-        match reg {
-            RegisterName::StackPointer => {
-                let top = self.stack.len();
-                self.stack.push(Value::SPtr(top)); },
-            RegisterName::ProgramCounter => self.stack.push(Value::IPtr(self.pc)),
-            _ => panic!("Unimplemented register access: {:?}", reg)
-        };
-        return Ok(());
+        let val = self.register_get(*reg)?;
+        self.stack.push(val);
+        Ok(())
     }
 
     fn do_popr(&mut self, reg: &cookie::RegisterName) -> Result<(), String> {
-        use self::cookie::Value;
-        use self::cookie::RegisterName;
-        match reg {
-            RegisterName::StackPointer => {
-                let v = self.pop()?;
-                self.stack.resize(expect_value!(v, SPtr, "Expecting SPtr value on stack but got {bad_value} instead.")?, Value::Void);
-            }
-            RegisterName::ProgramCounter => {
-                let v = self.pop()?;
-                self.pc = expect_value!(v, IPtr, "Expecting IPtr value on stack but got {bad_value} instead")?;
-            }
-            _ => panic!("Unimplemented register access {:?}", reg)
-        }
-        return Ok(());
+        let val = self.pop()?;
+        self.register_put(*reg, val)?;
+        Ok(())
     }
 
     fn get_value(&mut self, loc: &cookie::Loc) -> Result<cookie::Value, String> {
@@ -190,6 +172,7 @@ impl<'a> Thread<'a> {
         use self::cookie::RegisterName;
         match reg {
             RegisterName::StackPointer => Ok(Value::SPtr(self.stack.len())),
+            RegisterName::FramePointer => Ok(Value::SPtr(self.fp)),
             RegisterName::ProgramCounter => Ok(Value::IPtr(self.pc)),
             _ => Err(format!("Unimplemented register access: {}", reg))
         }
@@ -202,6 +185,11 @@ impl<'a> Thread<'a> {
             RegisterName::StackPointer => {
                 let v = expect_value!(val, SPtr, "Expecting SPtr value but got {bad_value} instead.")?;
                 self.stack.resize(v, Value::Void);
+                Ok(())
+            }
+            RegisterName::FramePointer => {
+                let v = expect_value!(val, SPtr, "Expecting SPtr value but got {bad_value} instead.")?;
+                self.fp = v;
                 Ok(())
             }
             RegisterName::ProgramCounter => {
@@ -638,8 +626,6 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(2)),
             PUSHR(RegisterName::StackPointer),
-            PUSHC(Value::I32(1)),
-            BOp(BinaryOp::SUB, Loc::Stack, Loc::Stack, Loc::Stack),
             LOADFROM(Loc::Stack, Loc::Stack),
             BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
@@ -652,8 +638,6 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(2)),
             PUSHC(Value::I32(1)),
-            PUSHC(Value::I32(1)),
-            BOp(BinaryOp::SUB, Loc::Stack, Loc::Stack, Loc::Stack),
             LOADFROM(Loc::Stack, Loc::Stack),
             BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
