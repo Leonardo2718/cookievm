@@ -77,6 +77,8 @@ macro_rules! peek {
     )
 }
 
+type Result = cookie_base::Result<Token>;
+
 pub struct Lexer<'a> {
     iter: Chars<'a>,
 }
@@ -85,14 +87,46 @@ impl<'a> Lexer<'a> {
     pub fn new<'b>(iter: Chars<'b>) -> Lexer<'b> {
         Lexer{iter: iter}
     }
-}
 
-type Result = cookie_base::Result<Token>;
+    fn match_decimal(&mut self) -> Result {
+        let mut s = String::new();
+        let is_num = |c:&char| c.is_digit(10);
+        eat_while!(self.iter.by_ref(), is_num, |c:&char| s.push(*c));
+        match self.iter.clone().peekable().peek() {
+            Some('.') => {
+                skip_n!(self.iter,1);
+                s.push('.');
+                eat_while!(self.iter.by_ref(), is_num, |c:&char| s.push(*c));
+                let num = s.clone().parse::<f32>();
+                return num.map(|f:f32| Token::Float(f)).map_err(|e| e.to_string());
+            },
+            _ => {
+                let num = s.clone().parse::<i32>();
+                return num.map(|i:i32| Token::Integer(i)).map_err(|e| e.to_string());
+            }
+        }
+    }
+
+    fn match_negative(&mut self) -> Result {
+        let t = self.match_decimal()?;
+        match t {
+            Token::Float(f) => Ok(Token::Float(-f)),
+            Token::Integer(i) => Ok(Token::Integer(-i)),
+            _ => Err(format!("Cannot take negative of non-integer/non-float token: {}", t))
+        }
+    }
+
+    fn match_hex(&mut self) -> Result {
+        let mut s = String::new();
+        let is_hex = |c:&char| c.is_digit(16);
+        eat_while!(self.iter.by_ref(), is_hex, |c:&char| s.push(*c));
+        let addr = usize::from_str_radix(s.as_ref(), 16);
+        return addr.map(|a:usize| Token::Address(a)).map_err(|e| e.to_string());
+    }
+}
 
 impl<'a> Iterator for Lexer<'a> {
     type Item = Result;
-
-
 
     fn next(&mut self) -> Option<Result> {
         macro_rules! emit_token {
@@ -109,6 +143,7 @@ impl<'a> Iterator for Lexer<'a> {
                 Some(&')') => { skip_n!(self.iter,1); emit_token!(Token::RParen); }
                 Some(&'.') => { skip_n!(self.iter,1); emit_token!(Token::Dot); }
                 Some(&';') => { eat_while!(self.iter.by_ref(), |c| c != &'\n', |_| ()); skip_n!(self.iter,1); continue; }
+                Some(&'-') => { skip_n!(self.iter,1); return Some(self.match_negative()); }
                 Some(c) if c.is_whitespace() => { skip_n!(self.iter,1); continue; }
                 Some(&'\'') => {
                     // when the current character is a ' , return the next character (or two if \ )
@@ -178,36 +213,16 @@ impl<'a> Iterator for Lexer<'a> {
                 }
                 Some(c) if c.is_digit(10) => {
                     // A numeric character indicates the start of a number. If the current character
-                    // is 0 and the next one is "x", then the number must be in hex. If not, the number
-                    // is decimal. If a period is found, then the number must be a float, otherwise
-                    // it's an integer.
+                    // is 0 and the next one is "x", then the number must be in hex,
+                    // otherwise it is in decimal
                     let mut s = String::new();
                     let mut iter_clone = self.iter.clone();
                     match (iter_clone.next(), iter_clone.next()) {
                         (Some('0'), Some('x')) => {
                             skip_n!(self.iter,2);
-                            let is_hex = |c:&char| c.is_digit(16);
-                            eat_while!(self.iter.by_ref(), is_hex, |c:&char| s.push(*c));
-                            let addr = usize::from_str_radix(s.as_ref(), 16);
-                            return Some(addr.map(|a:usize| Token::Address(a)).or(Err("Failed to parse address".to_string())));
-                        }
-                        _ => {
-                            let is_num = |c:&char| c.is_digit(10);
-                            eat_while!(self.iter.by_ref(), is_num, |c:&char| s.push(*c));
-                            match self.iter.clone().peekable().peek() {
-                                Some('.') => {
-                                    skip_n!(self.iter,1);
-                                    s.push('.');
-                                    eat_while!(self.iter.by_ref(), is_num, |c:&char| s.push(*c));
-                                    let num = s.clone().parse::<f32>();
-                                    return Some(num.map(|f:f32| Token::Float(f)).or(Err("Failed to parse floating point number".to_string())));
-                                },
-                                _ => {
-                                    let num = s.clone().parse::<i32>();
-                                    return Some(num.map(|i:i32| Token::Integer(i)).or(Err("Failed to parse integer".to_string())));
-                                }
-                            }
-                        }
+                            return Some(self.match_hex());
+                        },
+                        _ => return Some(self.match_decimal())
                     }
                 }
                 _ => { return None; }
@@ -424,5 +439,35 @@ mod test{
         assert_eq!(lexer.next().unwrap().unwrap(), Token::Label("L1".to_string()));
         assert_eq!(lexer.next().unwrap().unwrap(), Token::Label("L2".to_string()));
         assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_29() {
+        let mut lexer = Lexer::new("-234".chars());
+        assert_eq!(lexer.next().unwrap().unwrap(), Token::Integer(-234));
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_30() {
+        let mut lexer = Lexer::new("-5.43".chars());
+        assert_eq!(lexer.next().unwrap().unwrap(), Token::Float(-5.43));
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_31() {
+        let mut lexer = Lexer::new("F32 ( -6.78 )".chars());
+        assert_eq!(lexer.next().unwrap().unwrap(), Token::Ident("F32".to_string()));
+        assert_eq!(lexer.next().unwrap().unwrap(), Token::LParen);
+        assert_eq!(lexer.next().unwrap().unwrap(), Token::Float(-6.78));
+        assert_eq!(lexer.next().unwrap().unwrap(), Token::RParen);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_32() {
+        let mut lexer = Lexer::new("-foo".chars());
+        assert!(lexer.next().unwrap().is_err());
     }
 }
