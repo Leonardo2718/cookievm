@@ -26,6 +26,9 @@ License:
 
 use cookie_base as cookie;
 use std::collections::HashMap;
+use std::io;
+use std::io::Read;
+use std::io::Write;
 
 pub type InstructionList = Vec<cookie::Instruction>;
 pub type Stack = Vec<cookie::Value>;
@@ -124,13 +127,47 @@ impl<'a> Thread<'a> {
             },
             PRINT(src) => {
                 use self::cookie::Value::*;
-                match self.get_value(src)? {
-                    Char(c) => print!("{}", c),
-                    I32(i) => print!("{}", i),
-                    F32(f) => print!("{}", f),
-                    Bool(b) => print!("{}", b),
-                    v => print!("{}", v)
+                let s = match self.get_value(src)? {
+                    Char(c) => format!("{}", c),
+                    I32(i) => format!("{}", i),
+                    F32(f) => format!("{}", f),
+                    Bool(b) => format!("{}", b),
+                    v => format!("{}", v)
                 };
+                {
+                    let stdout = io::stdout();
+                    let mut handle = stdout.lock();
+                    handle.write(s.as_bytes()).map_err(|e| e.to_string())?;
+                    handle.flush().map_err(|e| e.to_string())?;
+                }
+                self.pc + 1
+            },
+            READ(t, dest) => {
+                use self::cookie::Value;
+                use self::cookie::Type;
+
+                macro_rules! read_val {
+                    ($t:tt) => ({
+                        let mut input = String::new();
+                        io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
+                        input.trim().parse::<$t>().map_err(|e| e.to_string())?
+                    })
+                }
+
+                // macro_rules! read
+
+                let val = match t {
+                    &Type::I32 => Value::I32(read_val!(i32)),
+                    &Type::F32 => Value::F32(read_val!(f32)),
+                    &Type::Bool => Value::Bool(read_val!(bool)),
+                    &Type::Char => {
+                        let mut input = String::new();
+                        io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
+                        Value::Char(input.chars().nth(0).unwrap())
+                    }
+                    _ => return Err(format!("Cannot do read of time: {}", t))
+                };
+                self.put_value(dest, val)?;
                 self.pc + 1
             },
             EXIT => { self.instructions.len() } // setting pc to past the end will force termination
