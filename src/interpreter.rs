@@ -451,6 +451,16 @@ mod test {
     }
 
     #[test]
+    fn uniop_test_6() {
+        let insts = vec![
+            PUSHC(Value::F32(3.14)),
+            UOp(UnaryOp::CVT(Type::I32), Loc::Stack, Loc::Stack),
+        ];
+        let mut thread = Thread::new(&insts, HashMap::new());
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
+    }
+
+    #[test]
     fn pushr_test_1() {
         let insts = vec![
             PUSHR(RegisterName::StackPointer),

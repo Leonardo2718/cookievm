@@ -184,6 +184,12 @@ fn parse_as_vinst2<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocPa
     let inst = match ident.to_lowercase().as_ref() {
         "neg" => gen_uop!(NEG),
         "not" => gen_uop!(NOT),
+        "cvt" => {
+            let t = parse_type(lexer)?;
+            let loc1 = parse_loc1(lexer)?;
+            let loc2 = parse_loc2(lexer)?;
+            Some(UOp(CVT(t), loc1, loc2))
+        }
         "loadfrom" => {
             let loc1 = parse_loc1(lexer)?;
             let loc2 = parse_loc2(lexer)?;
@@ -309,6 +315,12 @@ mod test {
     #[test]
     fn parse_vinst_test_4() {
         assert!(parse_vinst(&mut Lexer::new("foo".chars()), &parse_stackloc).is_err());
+    }
+
+    #[test]
+    fn parse_vinst_test_5() {
+        let inst = parse_vinst(&mut Lexer::new("CVT F32".chars()), &parse_stackloc).unwrap();
+        assert_eq!(inst, Instruction::UOp(UnaryOp::CVT(Type::F32), Loc::Stack, Loc::Stack));
     }
 
     #[test]

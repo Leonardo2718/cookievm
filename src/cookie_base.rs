@@ -98,24 +98,6 @@ impl fmt::Display for Value {
     }
 }
 
-macro_rules! apply_binary {
-    ($lmatch:ident, $lhs:expr, $rmatch:ident, $rhs:expr, $res:ident, $op:tt) => (
-        |err: String| match ($lhs, $rhs) {
-            (Value::$lmatch(l), Value::$rmatch(r)) => Ok(Value::$res(l.clone() $op r.clone())),
-            _ => Err(err)
-        }
-    )
-}
-
-macro_rules! apply_unary {
-    ($matcher:ident, $expr:expr, $res:ident, $op:tt) => {
-        |err: String| match $expr {
-            Value::$matcher(val) => Ok(Value::$res($op(val.clone()))),
-            _ => Err(err)
-        }
-    }
-}
-
 // cookie register names ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(Debug,Clone,Copy,PartialEq)]
@@ -138,10 +120,92 @@ impl fmt::Display for RegisterName {
 // cookie operations ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(Debug,Clone,PartialEq)]
+pub enum UnaryOp {
+    NEG, NOT, CVT(Type)
+}
+
+macro_rules! apply_unary {
+    ($matcher:ident, $expr:expr, $res:ident, $op:tt) => {
+        |err: String| match $expr {
+            Value::$matcher(val) => Ok(Value::$res($op(val.clone()))),
+            _ => Err(err)
+        }
+    }
+}
+
+impl UnaryOp {
+    pub fn apply_to(&self, val: Value) -> Result<Value> {
+        let apply_err = Err(format!("Cannot apply {} operation to {}", self, val));
+
+        macro_rules! cvt_err {
+            ($t:expr) => (
+                Err(format!("Cannot convert value {} (of type {}) to type {}", val, val.get_type(), $t))
+            )
+        }
+
+        match self {
+            UnaryOp::NEG => apply_err
+                .or_else(apply_unary!(I32, val, I32, -))
+                .or_else(apply_unary!(F32, val, F32, -)),
+            UnaryOp::NOT => apply_err
+                .or_else(apply_unary!(Bool, val, Bool, !))
+                .or_else(apply_unary!(I32, val, I32, !)),
+            UnaryOp::CVT(Type::I32) => cvt_err!(Type::I32)
+                .or_else(apply_unary!(I32, val, I32, (|v| v)))
+                .or_else(apply_unary!(F32, val, I32, (|v| v as i32)))
+                .or_else(apply_unary!(Char, val, I32, (|v| v as i32)))
+                .or_else(apply_unary!(Bool, val, I32, (|v| v as i32)))
+                .or_else(apply_unary!(IPtr, val, I32, (|v| v as i32)))
+                .or_else(apply_unary!(SPtr, val, I32, (|v| v as i32))),
+            UnaryOp::CVT(Type::F32) => cvt_err!(Type::F32)
+                .or_else(apply_unary!(I32, val, F32, (|v| v as f32)))
+                .or_else(apply_unary!(F32, val, F32, (|v| v))),
+            UnaryOp::CVT(Type::Char) => cvt_err!(Type::Char)
+                .or_else(apply_unary!(Char, val, Char, (|v| v))),
+            UnaryOp::CVT(Type::Bool) => cvt_err!(Type::Bool)
+                .or_else(apply_unary!(I32, val, Bool, (|v| v != 0)))
+                .or_else(apply_unary!(F32, val, Bool, (|v| v != 0.0)))
+                .or_else(apply_unary!(Char, val, Bool, (|v| v != '\0')))
+                .or_else(apply_unary!(Bool, val, Bool, (|v| v)))
+                .or_else(apply_unary!(IPtr, val, Bool, (|v| v != 0)))
+                .or_else(apply_unary!(SPtr, val, Bool, (|v| v != 0))),
+            UnaryOp::CVT(Type::IPtr) => cvt_err!(Type::IPtr)
+                .or_else(apply_unary!(I32, val, IPtr, (|v| v as usize)))
+                .or_else(apply_unary!(IPtr, val, IPtr, (|v| v as usize))),
+            UnaryOp::CVT(Type::SPtr) => cvt_err!(Type::IPtr)
+                .or_else(apply_unary!(I32, val, SPtr, (|v| v as usize)))
+                .or_else(apply_unary!(SPtr, val, SPtr, (|v| v as usize))),
+            UnaryOp::CVT(Type::Void) => cvt_err!(Type::Void)
+        }
+    }
+}
+
+impl fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug,Clone,PartialEq)]
 pub enum BinaryOp {
     ADD, SUB, MUL, DIV, MOD,
     AND, OR, XOR,
     EQ, LT, LE, GT, GE,
+}
+
+macro_rules! apply_binary {
+    ($lmatch:ident, $lhs:expr, $rmatch:ident, $rhs:expr, $res:ident, $op:tt) => (
+        |err: String| match ($lhs, $rhs) {
+            (Value::$lmatch(l), Value::$rmatch(r)) => Ok(Value::$res(l.clone() $op r.clone())),
+            _ => Err(err)
+        }
+    )
 }
 
 impl BinaryOp {
@@ -224,37 +288,6 @@ impl BinaryOp {
                 .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, !=))
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, ^)),
         }
-    }
-}
-
-#[derive(Debug,Clone,PartialEq)]
-pub enum UnaryOp {
-    NEG, NOT
-}
-
-impl UnaryOp {
-    pub fn apply_to(&self, val: Value) -> Result<Value> {
-        let apply_err = Err(format!("Cannot apply {} operation to {}", self, val));
-        match self {
-            UnaryOp::NEG => apply_err
-                .or_else(apply_unary!(I32, val, I32, -))
-                .or_else(apply_unary!(F32, val, F32, -)),
-            UnaryOp::NOT => apply_err
-                .or_else(apply_unary!(Bool, val, Bool, !))
-                .or_else(apply_unary!(I32, val, I32, !)),
-        }
-    }
-}
-
-impl fmt::Display for BinaryOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl fmt::Display for UnaryOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
     }
 }
 
@@ -468,6 +501,342 @@ mod test {
     fn not_test_7() {
         let val = Value::Void;
         assert!(NOT.apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_i32_test_1() {
+        let val = Value::I32(3);
+        assert_eq!(CVT(Type::I32).apply_to(val).unwrap(), val);
+    }
+
+    #[test]
+    fn cvt_i32_test_2() {
+        let val = Value::F32(3.14);
+        assert_eq!(CVT(Type::I32).apply_to(val).unwrap(), Value::I32(3));
+    }
+
+    #[test]
+    fn cvt_i32_test_3() {
+        let val = Value::Char('a');
+        assert_eq!(CVT(Type::I32).apply_to(val).unwrap(), Value::I32(97));
+    }
+
+    #[test]
+    fn cvt_i32_test_4() {
+        let val = Value::Bool(true);
+        assert_eq!(CVT(Type::I32).apply_to(val).unwrap(), Value::I32(1));
+    }
+
+    #[test]
+    fn cvt_i32_test_5() {
+        let val = Value::Bool(false);
+        assert_eq!(CVT(Type::I32).apply_to(val).unwrap(), Value::I32(0));
+    }
+
+    #[test]
+    fn cvt_i32_test_6() {
+        let val = Value::IPtr(1234);
+        assert_eq!(CVT(Type::I32).apply_to(val).unwrap(), Value::I32(1234));
+    }
+
+    #[test]
+    fn cvt_i32_test_7() {
+        let val = Value::SPtr(1234);
+        assert_eq!(CVT(Type::I32).apply_to(val).unwrap(), Value::I32(1234));
+    }
+
+    #[test]
+    fn cvt_i32_test_8() {
+        let val = Value::Void;
+        assert!(CVT(Type::I32).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_f32_test_1() {
+        let val = Value::I32(4);
+        assert_eq!(CVT(Type::F32).apply_to(val).unwrap(), Value::F32(4.0));
+    }
+
+    #[test]
+    fn cvt_f32_test_2() {
+        let val = Value::F32(2.71828);
+        assert_eq!(CVT(Type::F32).apply_to(val).unwrap(), Value::F32(2.71828));
+    }
+
+    #[test]
+    fn cvt_f32_test_3() {
+        let val = Value::Char('c');
+        assert!(CVT(Type::F32).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_f32_test_4() {
+        let val = Value::Bool(true);
+        assert!(CVT(Type::F32).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_f32_test_5() {
+        let val = Value::IPtr(0x1);
+        assert!(CVT(Type::F32).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_f32_test_6() {
+        let val = Value::SPtr(0x1);
+        assert!(CVT(Type::F32).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_f32_test_7() {
+        let val = Value::Void;
+        assert!(CVT(Type::F32).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_char_test_1() {
+        let val = Value::I32(65);
+        assert!(CVT(Type::Char).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_char_test_2() {
+        let val = Value::F32(3.14159);
+        assert!(CVT(Type::Char).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_char_test_3() {
+        let val = Value::Char('x');
+        assert_eq!(CVT(Type::Char).apply_to(val).unwrap(), Value::Char('x'));
+    }
+
+    #[test]
+    fn cvt_char_test_4() {
+        let val = Value::Bool(true);
+        assert!(CVT(Type::Char).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_char_test_5() {
+        let val = Value::IPtr(0x3);
+        assert!(CVT(Type::Char).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_char_test_6() {
+        let val = Value::SPtr(0x3);
+        assert!(CVT(Type::Char).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_char_test_7() {
+        let val = Value::Void;
+        assert!(CVT(Type::Char).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_bool_test_1() {
+        let val = Value::I32(0);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn cvt_bool_test_2() {
+        let val = Value::I32(4);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn cvt_bool_test_3() {
+        let val = Value::F32(0.0);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn cvt_bool_test_4() {
+        let val = Value::F32(1.0);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn cvt_bool_test_5() {
+        let val = Value::Char('\0');
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn cvt_bool_test_6() {
+        let val = Value::Char('\n');
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn cvt_bool_test_7() {
+        let val = Value::Bool(false);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn cvt_bool_test_8() {
+        let val = Value::Bool(true);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn cvt_bool_test_9() {
+        let val = Value::IPtr(0x0);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn cvt_bool_test_10() {
+        let val = Value::IPtr(0x8);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn cvt_bool_test_11() {
+        let val = Value::SPtr(0x0);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn cvt_bool_test_12() {
+        let val = Value::SPtr(0x8);
+        assert_eq!(CVT(Type::Bool).apply_to(val).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn cvt_bool_test_13() {
+        let val = Value::Void;
+        assert!(CVT(Type::Bool).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_iptr_test_1() {
+        let val = Value::I32(254);
+        assert_eq!(CVT(Type::IPtr).apply_to(val).unwrap(), Value::IPtr(254));
+    }
+
+    #[test]
+    fn cvt_iptr_test_2() {
+        let val = Value::F32(2.54);
+        assert!(CVT(Type::IPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_iptr_test_3() {
+        let val = Value::Char('b');
+        assert!(CVT(Type::IPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_iptr_test_4() {
+        let val = Value::Bool(false);
+        assert!(CVT(Type::IPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_iptr_test_5() {
+        let val = Value::IPtr(0x754);
+        assert_eq!(CVT(Type::IPtr).apply_to(val).unwrap(), Value::IPtr(0x754));
+    }
+
+    #[test]
+    fn cvt_iptr_test_6() {
+        let val = Value::SPtr(0x754);
+        assert!(CVT(Type::IPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_iptr_test_7() {
+        let val = Value::Void;
+        assert!(CVT(Type::IPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_sptr_test_1() {
+        let val = Value::I32(254);
+        assert_eq!(CVT(Type::SPtr).apply_to(val).unwrap(), Value::SPtr(254));
+    }
+
+    #[test]
+    fn cvt_sptr_test_2() {
+        let val = Value::F32(2.54);
+        assert!(CVT(Type::SPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_sptr_test_3() {
+        let val = Value::Char('b');
+        assert!(CVT(Type::SPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_sptr_test_4() {
+        let val = Value::Bool(false);
+        assert!(CVT(Type::SPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_sptr_test_5() {
+        let val = Value::IPtr(0x754);
+        assert!(CVT(Type::SPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_sptr_test_6() {
+        let val = Value::SPtr(0x754);
+        assert_eq!(CVT(Type::SPtr).apply_to(val).unwrap(), Value::SPtr(0x754));
+    }
+
+    #[test]
+    fn cvt_sptr_test_7() {
+        let val = Value::Void;
+        assert!(CVT(Type::SPtr).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_void_test_1() {
+        let val = Value::I32(3);
+        assert!(CVT(Type::Void).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_void_test_2() {
+        let val = Value::F32(4.32);
+        assert!(CVT(Type::Void).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_void_test_3() {
+        let val = Value::Char('c');
+        assert!(CVT(Type::Void).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_void_test_4() {
+        let val = Value::Bool(false);
+        assert!(CVT(Type::Void).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_void_test_5() {
+        let val = Value::IPtr(0x385);
+        assert!(CVT(Type::Void).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_void_test_6() {
+        let val = Value::SPtr(0x385);
+        assert!(CVT(Type::Void).apply_to(val).is_err());
+    }
+
+    #[test]
+    fn cvt_void_test_7() {
+        let val = Value::Void;
+        assert!(CVT(Type::Void).apply_to(val).is_err());
     }
 
     #[test]
