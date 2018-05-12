@@ -134,7 +134,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
 
         macro_rules! emit_err {
-            ($($err:expr),+) => ( return Some(Err(format!($($err)+))) )
+            ($($err:expr),+) => ( return Some(Err(format!($($err),+))) )
         }
 
         loop {
@@ -225,7 +225,8 @@ impl<'a> Iterator for Lexer<'a> {
                         _ => return Some(self.match_decimal())
                     }
                 }
-                _ => { return None; }
+                Some(c) => emit_err!("Unexpected character {}", c),
+                None => { return None; }
             }
         }
     }
@@ -356,7 +357,7 @@ mod test{
     fn lexer_test_17() {
         let mut lexer = Lexer::new("true:".chars());
         assert_eq!(lexer.next().unwrap().unwrap(), Token::Bool(true));
-        assert!(lexer.next().is_none());
+        assert!(lexer.next().unwrap().is_err());
     }
 
     #[test]
