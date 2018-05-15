@@ -208,6 +208,25 @@ macro_rules! apply_binary {
     )
 }
 
+macro_rules! apply_binaryf {
+    ($lmatch:ident, $lhs:expr, $rmatch:ident, $rhs:expr, $res:ident, $op:tt) => (
+        |err: String| match ($lhs, $rhs) {
+            (Value::$lmatch(l), Value::$rmatch(r)) => Ok(Value::$res($op(l.clone(), r.clone()))),
+            _ => Err(err)
+        }
+    )
+}
+
+fn ptr_add(lhs: usize, rhs:i32) -> usize {
+    if rhs < 0 { lhs - (-rhs as usize) }
+    else { lhs + rhs as usize }
+}
+
+fn ptr_sub(lhs: usize, rhs:i32) -> usize {
+    if rhs < 0 { lhs + (-rhs as usize) }
+    else { lhs - rhs as usize }
+}
+
 impl BinaryOp {
     pub fn apply_to(&self, lhs: Value, rhs: Value) -> Result<Value> {
         let apply_err = Err(format!("Cannot apply {} operation to {} and {}", self, lhs, rhs));
@@ -217,29 +236,25 @@ impl BinaryOp {
             BinaryOp::ADD => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, +))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, F32, +))
-                .or_else(apply_binary!(
+                .or_else(apply_binaryf!(
                     IPtr, lhs,
-                    IPtr,
-                    apply_err_1.or_else(apply_unary!(I32, rhs, IPtr, (|i| i as usize)))?,
-                    IPtr, +))
-                .or_else(apply_binary!(
+                    I32, rhs,
+                    IPtr, ptr_add))
+                .or_else(apply_binaryf!(
                     SPtr, lhs,
-                    SPtr,
-                    apply_err_2.or_else(apply_unary!(I32, rhs, SPtr, (|i| i as usize)))?,
-                    SPtr, +)),
+                    I32, rhs,
+                    SPtr, ptr_add)),
             BinaryOp::SUB => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, -))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, F32, -))
-                .or_else(apply_binary!(
+                .or_else(apply_binaryf!(
                     IPtr, lhs,
-                    IPtr,
-                    apply_err_1.or_else(apply_unary!(I32, rhs, IPtr, (|i| i as usize)))?,
-                    IPtr, -))
-                .or_else(apply_binary!(
+                    I32, rhs,
+                    IPtr, ptr_sub))
+                .or_else(apply_binaryf!(
                     SPtr, lhs,
-                    SPtr,
-                    apply_err_2.or_else(apply_unary!(I32, rhs, SPtr, (|i| i as usize)))?,
-                    SPtr, -)),
+                    I32, rhs,
+                    SPtr, ptr_sub)),
             BinaryOp::MUL => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, *))
                 .or_else(apply_binary!(F32, lhs, F32, rhs, F32, *)),
