@@ -36,6 +36,8 @@ mod interpreter;
 mod lexer;
 mod parser;
 
+extern crate rustyline;
+
 fn main() {
     use interpreter::*;
     use lexer::*;
@@ -50,9 +52,13 @@ fn main() {
     let (instructions, labels) = parse(Lexer::new(source.chars())).unwrap();
 
     let mut thread = Thread::new(&instructions, labels);
-    match thread.exec() {
-        Ok(Some(v)) => println!("\n-----\n{}", v),
-        Ok(None) => println!("\n-----"),
+    // match thread.exec() {
+    //     Ok(Some(v)) => println!("\n-----\n{}", v),
+    //     Ok(None) => println!("\n-----"),
+    //     Err(msg) => println!("{}", msg),
+    // }
+    match thread.debug() {
+        Ok(()) => {},
         Err(msg) => println!("{}", msg),
     }
 }

@@ -34,6 +34,12 @@ pub type InstructionList = Vec<cookie::Instruction>;
 pub type Stack = Vec<cookie::Value>;
 pub type LabelTable = HashMap<String, usize>;
 
+#[derive(Debug,Clone,PartialEq)]
+enum DebugState {
+    Running, // program is running (in debugger)
+    Paused,  // program execution is paused
+}
+
 /*
 The `Thread` struct handles execution of Cookie code.
 */
@@ -44,6 +50,7 @@ pub struct Thread<'a> {
     pc: usize,
     gpr: [cookie::Value; 16],
     label_table: LabelTable,
+    debug_state: DebugState,
 }
 
 macro_rules! expect_value {
@@ -64,6 +71,7 @@ impl<'a> Thread<'a> {
                 , pc: 0
                 , gpr: [Value::Void; 16]
                 , label_table: labels
+                , debug_state: DebugState::Paused
                 }
     }
 
@@ -243,6 +251,89 @@ impl<'a> Thread<'a> {
 
     fn get_label(&self, label: &str) -> cookie::Result<&usize> {
         self.label_table.get(label).ok_or(format!("No label with name {}", label)).clone()
+    }
+
+    // debugger ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    pub fn debug(&mut self) -> Result<(), String> {
+        use std::cmp;
+        use rustyline::error::ReadlineError;
+        use rustyline::Editor;
+
+        let mut prompt = Editor::<()>::new();  // command-line style prompt
+
+        macro_rules! debug_quit {
+            () => ({
+                if self.pc == 0 || self.pc >= self.instructions.len() { break; }
+                else {
+                    let readline = prompt.readline("Program thread is still running, are you sure you want to quit (y/n): ");
+                    match readline {
+                        Ok(ref r) if r == "y" => return Err("Program terminated by user.".to_string()),
+                        _ => continue,
+                    }
+                }
+            })
+        }
+
+        macro_rules! stack_point {
+            ($pos:expr) => (
+                if $pos == self.stack.len() && $pos == self.fp { "<= $sp, $fp" }
+                else if $pos == self.fp { "<= $fp" }
+                else if $pos == self.stack.len() { "<= $sp" }
+                else { "" }
+            )
+        }
+
+        macro_rules! print_stack {
+            () => ({
+                for (pos, val) in self.stack.iter().enumerate().rev() {
+                    let pos = pos + 1;
+                    let point = stack_point!(pos);
+                    println!("0x{:08x} {:12}{}", pos, val.to_string(), point);
+                }
+                println!("----------");
+                println!("0x{:08x} {:12}{}", 0, cookie::Value::Void.to_string(), stack_point!(0));
+            })
+        }
+
+        macro_rules! list_insts {
+            ($addr:expr) => ({
+                let start = if $addr < 2 { $addr } else { $addr - 2 };
+                let end = cmp::min(self.instructions.len(), $addr + 3);
+                for i in start..end {
+                    let pointer = if i == self.pc {"$pc => "} else { "       " };
+                    println!("{}0x{:08x} {:?}", pointer, i, self.instructions[i]);
+                }
+            })
+        }
+
+        loop {
+            if self.debug_state == DebugState::Running {
+                if self.pc >= self.instructions.len() { self.debug_state = DebugState::Paused; continue; }
+                let inst = &self.instructions[self.pc];
+                match self.exec_instruction(inst) {
+                    Err(msg) => { println!("{}", msg); self.debug_state = DebugState::Paused; }
+                    _ => continue,
+                };
+            } else {
+                let readline = prompt.readline(">> ");
+                match readline {
+                    Ok(cmd) => { prompt.add_history_entry(cmd.as_ref()); match cmd.as_ref() {
+                        "l" | "list" => list_insts!(self.pc),
+                        "bt" | "stack" | "backtrace" => print_stack!(),
+                        "c" | "continue" | "r" | "run" => self.debug_state = DebugState::Running,
+                        "s" | "step" => { let inst = &self.instructions[self.pc]; self.exec_instruction(&inst); }
+                        "q" | "quit" => debug_quit!(),
+                        _ => println!("Error: unknown command {:?}", cmd),
+                    };},
+                    Err(ReadlineError::Eof) => continue,
+                    Err(ReadlineError::Interrupted) => continue,
+                    Err(err) => break,
+                };
+            }
+        }
+
+        return Ok(());
     }
 }
 
