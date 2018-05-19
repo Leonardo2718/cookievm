@@ -5,3 +5,4 @@ authors = ["Leonardo Banderali <leonardo2718@protonmail.com>"]
 
 [dependencies]
 rustyline = "1.0.0"
+argparse = "0.2.1"

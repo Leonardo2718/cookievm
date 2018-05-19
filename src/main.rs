@@ -37,28 +37,47 @@ mod lexer;
 mod parser;
 
 extern crate rustyline;
+extern crate argparse;
+
+struct Options {
+    source_path: String,
+    debug: bool
+}
 
 fn main() {
     use interpreter::*;
     use lexer::*;
     use parser::*;
 
-    let fpath = args().nth(1).ok_or("Usage: cookie PATH").unwrap();
-    let f = File::open(fpath).unwrap();
-    let mut reader = BufReader::new(f);
+    let mut options = Options{source_path: "".to_string(), debug: false};
+    {
+        use argparse as ap;
+        let mut parser = ap::ArgumentParser::new();
+        parser.set_description("The cookie VM");
+        parser.refer(&mut options.debug)
+            .add_option(&["-d", "--debug"], ap::StoreTrue, "run cookie code in debugger");
+        parser.refer(&mut options.source_path)
+            .add_argument("source_path", ap::Store, "source file to be executed").required();
+        parser.parse_args_or_exit();
+    }
+
     let mut source = String::new();
-    reader.read_to_string(&mut source).unwrap(); // expect read to succeed
+    {
+        let f = File::open(options.source_path).unwrap();
+        let mut reader = BufReader::new(f);
+        reader.read_to_string(&mut source).unwrap(); // expect read to succeed
+    }
 
     let (instructions, labels) = parse(Lexer::new(source.chars())).unwrap();
 
     let mut thread = Thread::new(&instructions, labels);
-    // match thread.exec() {
-    //     Ok(Some(v)) => println!("\n-----\n{}", v),
-    //     Ok(None) => println!("\n-----"),
-    //     Err(msg) => println!("{}", msg),
-    // }
-    match thread.debug() {
+    if options.debug { match thread.debug() {
         Ok(()) => {},
         Err(msg) => println!("{}", msg),
-    }
+    }}
+    else { match thread.exec() {
+        Ok(Some(v)) => println!("\n-----\n{}", v),
+        Ok(None) => println!("\n-----"),
+        Err(msg) => println!("{}", msg),
+    }}
 }
