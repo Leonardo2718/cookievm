@@ -230,8 +230,6 @@ fn ptr_sub(lhs: usize, rhs:i32) -> usize {
 impl BinaryOp {
     pub fn apply_to(&self, lhs: Value, rhs: Value) -> Result<Value> {
         let apply_err = Err(format!("Cannot apply {} operation to {} and {}", self, lhs, rhs));
-        let apply_err_1 = apply_err.clone();
-        let apply_err_2 = apply_err.clone();
         match self {
             BinaryOp::ADD => apply_err
                 .or_else(apply_binary!(I32, lhs, I32, rhs, I32, +))
@@ -484,7 +482,7 @@ mod test {
 
     #[test]
     fn not_test_2() {
-        let val = Value::I32(0xf0f0f0f0);
+        let val = Value::I32(0x0f0f0f0f << 4);
         assert_eq!(NOT.apply_to(val).unwrap(), Value::I32(0x0f0f0f0f));
     }
 

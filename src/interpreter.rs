@@ -27,7 +27,6 @@ License:
 use cookie_base as cookie;
 use std::collections::HashMap;
 use std::io;
-use std::io::Read;
 use std::io::Write;
 
 pub type InstructionList = Vec<cookie::Instruction>;
@@ -179,7 +178,6 @@ impl<'a> Thread<'a> {
                 self.pc + 1
             },
             EXIT => { self.instructions.len() } // setting pc to past the end will force termination
-            _ => panic!("Unimplemented instruction: {:?}", inst)
         };
         return Ok(());
     }
@@ -322,13 +320,13 @@ impl<'a> Thread<'a> {
                         "l" | "list" => list_insts!(self.pc),
                         "bt" | "stack" | "backtrace" => print_stack!(),
                         "c" | "continue" | "r" | "run" => self.debug_state = DebugState::Running,
-                        "s" | "step" => { let inst = &self.instructions[self.pc]; self.exec_instruction(&inst); }
+                        "s" | "step" => { let inst = &self.instructions[self.pc]; self.exec_instruction(&inst)?; }
                         "q" | "quit" => debug_quit!(),
                         _ => println!("Error: unknown command {:?}", cmd),
                     };},
                     Err(ReadlineError::Eof) => continue,
                     Err(ReadlineError::Interrupted) => continue,
-                    Err(err) => break,
+                    Err(_) => break,
                 };
             }
         }

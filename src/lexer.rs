@@ -215,7 +215,6 @@ impl<'a> Iterator for Lexer<'a> {
                     // A numeric character indicates the start of a number. If the current character
                     // is 0 and the next one is "x", then the number must be in hex,
                     // otherwise it is in decimal
-                    let mut s = String::new();
                     let mut iter_clone = self.iter.clone();
                     match (iter_clone.next(), iter_clone.next()) {
                         (Some('0'), Some('x')) => {
@@ -235,7 +234,6 @@ impl<'a> Iterator for Lexer<'a> {
 #[cfg(test)]
 mod test{
     use super::*;
-    use cookie_base::Instruction::*;
 
     #[test]
     fn lexer_test_1() {

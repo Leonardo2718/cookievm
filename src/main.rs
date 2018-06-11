@@ -26,8 +26,7 @@ License:
 
 #![feature(transpose_result)]
 
-use std::env::args;
-use std::io::prelude::*;
+use std::io::prelude::Read;
 use std::fs::File;
 use std::io::BufReader;
 
