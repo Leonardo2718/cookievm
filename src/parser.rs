@@ -29,21 +29,72 @@ use interpreter::*;
 use lexer::*;
 use std::iter::Iterator;
 use std::collections::HashMap;
+use std::fmt;
+use std::error;
+use std::result;
+use std::convert;
+
+#[derive(Debug,Clone,PartialEq)]
+pub enum ParserError {
+    UnexpectedToken,
+    UnexpectedIdentifier,
+    ExpectingMoreTokens,
+    LexerError(LexerError)
+}
+
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl error::Error for ParserError {
+    fn description(&self) -> &str {
+        use self::ParserError::*;
+        match self {
+            &UnexpectedToken => "Found an unexpected token while parsing",
+            &UnexpectedIdentifier => "Found an unexpected identifier while parsing",
+            &ExpectingMoreTokens => "Expecting more tokens but token stream ended",
+            LexerError(_) => "Lexing error occured while parsing (see cause)"
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match self {
+            &ParserError::LexerError(ref e) => Some(e),
+            _ => None
+        }
+    }
+}
+
+impl convert::From<LexerError> for ParserError {
+    fn from(error: LexerError) -> Self {
+        ParserError::LexerError(error)
+    }
+}
+
+impl convert::From<ParserError> for String {
+    fn from(error: ParserError) -> Self {
+        error.to_string()
+    }
+}
+
+type Result<T> = result::Result<T, ParserError>;
+
+macro_rules! unexpected_token ( ($t:expr)  => (Err(ParserError::UnexpectedToken)) );
+macro_rules! unexpected_id    ( ($id:expr) => (Err(ParserError::UnexpectedIdentifier)) );
+macro_rules! unexpected_end   ( ()         => (Err(ParserError::ExpectingMoreTokens)) );
 
 macro_rules! eat_token_ {
     ($iter:expr, $expect:tt) => ({
         let t = $iter.next().transpose()?;
         match t {
             Some(Token::$expect) => Ok(t.unwrap()),
-            Some(t) => Err(format!("Unexpected token: {}", t)),
-            None => Err(format!("Unexpected end of token stream"))
+            Some(t) => unexpected_token!(t),
+            None => unexpected_end!()
         }
     })
 }
-
-macro_rules! unexpected_token ( ($t:expr)  => (Err(format!("Unexpected token: {}", $t))) );
-macro_rules! unexpected_id    ( ($id:expr) => (Err(format!("Unexpected identifier: {}", $id))) );
-macro_rules! unexpected_end   ( ()         => {Err(format!("Unexpected end of token stream"))} );
 
 macro_rules! eat_token {
     ($iter:expr, $expect:tt) => ({
