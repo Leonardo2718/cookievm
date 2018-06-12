@@ -123,6 +123,76 @@ impl<'a> Lexer<'a> {
         let addr = usize::from_str_radix(s.as_ref(), 16);
         return addr.map(|a:usize| Token::Address(a)).map_err(|e| e.to_string());
     }
+
+    fn match_char(&mut self) -> Result {
+        let c = match self.iter.next() {
+            Some('\\') => {
+                match self.iter.next() {
+                    Some('\'') => '\'',
+                    Some('\\') => '\\',
+                    Some('t') => '\t',
+                    Some('n') => '\n',
+                    Some('r') => '\r',
+                    Some(c) => c,
+                    None => return Err("Unexpected end of character stream".to_string())
+                }
+            },
+            Some(c) => c,
+            _ => return Err("Unexpected end of character stream".to_string())
+        };
+        Ok(Token::Char(c))
+    }
+
+    fn match_reg(&mut self) -> Result {
+        let mut s = String::new();
+        match self.iter.clone().peekable().peek() {
+            Some(c) if c.is_numeric() => {
+                let is_gpr = |c:&char| c.is_numeric();
+                eat_while!(self.iter, is_gpr, |c:&char| s.push(*c));
+                let reg_num = u8::from_str_radix(s.as_ref(), 10);
+                reg_num.map(|i:u8| Token::R(i)).or(Err("Failed to parse GPR number".to_string()))
+            },
+            Some(c) if c.is_alphabetic() => {
+                let is_reg = |c:&char| c.is_alphabetic();
+                eat_while!(self.iter, is_reg, |c:&char| s.push(*c));
+                return match s.as_ref() {
+                    "sp" => Ok(Token::SP),
+                    "fp" => Ok(Token::FP),
+                    "pc" => Ok(Token::PC),
+                    _ => Err("Unexpected end of character stream".to_string())
+                };
+            }
+            _ => return Err("Unexpected end of character stream".to_string())
+        }
+    }
+
+    fn match_ident(&mut self) -> Result {
+        let mut s = String::new();
+        let is_ident = |c:&char| c.is_alphanumeric() || c == &'_';
+        eat_while!(self.iter.by_ref(), is_ident, |c:&char| s.push(*c));
+        return match s.to_lowercase().as_ref() {
+            "true" => Ok(Token::Bool(true)),
+            "false" => Ok(Token::Bool(false)),
+            "void" => Ok(Token::Void),
+            _ => match peek!(self.iter) {
+                Some(&':') => { skip_n!(self.iter, 1); Ok(Token::Label(s)) },
+                _ => Ok(Token::Ident(s))
+            }
+        };
+    }
+
+    fn match_num(&mut self) -> Result {
+        // If the current character is 0 and the next one is "x",
+        // then the number must be in hex, otherwise it is in decimal
+        let mut iter_clone = self.iter.clone();
+        return match (iter_clone.next(), iter_clone.next()) {
+            (Some('0'), Some('x')) => {
+                skip_n!(self.iter,2);
+                self.match_hex()
+            },
+            _ => self.match_decimal()
+        }
+    }
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -149,23 +219,9 @@ impl<'a> Iterator for Lexer<'a> {
                     // when the current character is a ' , return the next character (or two if \ )
                     // and check there is a closing '
                     skip_n!(self.iter,1);
-                    let c = match self.iter.next() {
-                        Some('\\') => {
-                            match self.iter.next() {
-                                Some('\'') => '\'',
-                                Some('\\') => '\\',
-                                Some('t') => '\t',
-                                Some('n') => '\n',
-                                Some('r') => '\r',
-                                Some(c) => c,
-                                None => emit_err!("Unexpected end of character stream")
-                            }
-                        },
-                        Some(c) => c,
-                        _ => emit_err!("Unexpected end of character stream")
-                    };
+                    let t = Some(self.match_char());
                     match self.iter.next() {
-                        Some('\'') => emit_token!(Token::Char(c)),
+                        Some('\'') => return t,
                         _ => emit_err!("Unexpected end of character stream")
                     };
                 }
@@ -173,56 +229,17 @@ impl<'a> Iterator for Lexer<'a> {
                     // a $ indicates the start of a register name, so the next characters must either
                     // be numeric (for a GPR) or the name of a special register
                     skip_n!(self.iter, 1);
-                    let mut s = String::new();
-                    match self.iter.clone().peekable().peek() {
-                        Some(c) if c.is_numeric() => {
-                            let is_gpr = |c:&char| c.is_numeric();
-                            eat_while!(self.iter, is_gpr, |c:&char| s.push(*c));
-                            let reg_num = u8::from_str_radix(s.as_ref(), 10);
-                            return Some(reg_num.map(|i:u8| Token::R(i)).or(Err("Failed to parse GPR number".to_string())));
-                        },
-                        Some(c) if c.is_alphabetic() => {
-                            let is_reg = |c:&char| c.is_alphabetic();
-                            eat_while!(self.iter, is_reg, |c:&char| s.push(*c));
-                            match s.as_ref() {
-                                 "sp" => emit_token!(Token::SP),
-                                 "fp" => emit_token!(Token::FP),
-                                 "pc" => emit_token!(Token::PC),
-                                 _ => emit_err!("Unexpected end of character stream")
-                            };
-                        }
-                        _ => emit_err!("Unexpected end of character stream")
-                    }
+                    return Some(self.match_reg());
                 }
                 Some(c) if c.is_alphabetic() || c == &'_' => {
                     // when a character is alphabetic or an _ , it indicates the start of an identifer
                     // which can either be one of the "special" identifiers (keywords) or a generic
                     // name (e.g. a label reference)
-                    let mut s = String::new();
-                    let is_ident = |c:&char| c.is_alphanumeric() || c == &'_';
-                    eat_while!(self.iter.by_ref(), is_ident, |c:&char| s.push(*c));
-                    match s.to_lowercase().as_ref() {
-                        "true" => emit_token!(Token::Bool(true)),
-                        "false" => emit_token!(Token::Bool(false)),
-                        "void" => emit_token!(Token::Void),
-                        _ => match peek!(self.iter) {
-                            Some(&':') => { skip_n!(self.iter, 1); emit_token!(Token::Label(s)) },
-                            _ => emit_token!(Token::Ident(s))
-                        }
-                    };
+                    return Some(self.match_ident());
                 }
                 Some(c) if c.is_digit(10) => {
-                    // A numeric character indicates the start of a number. If the current character
-                    // is 0 and the next one is "x", then the number must be in hex,
-                    // otherwise it is in decimal
-                    let mut iter_clone = self.iter.clone();
-                    match (iter_clone.next(), iter_clone.next()) {
-                        (Some('0'), Some('x')) => {
-                            skip_n!(self.iter,2);
-                            return Some(self.match_hex());
-                        },
-                        _ => return Some(self.match_decimal())
-                    }
+                    // A numeric character indicates the start of a number
+                    return Some(self.match_num());
                 }
                 Some(c) => emit_err!("Unexpected character {}", c),
                 None => { return None; }
