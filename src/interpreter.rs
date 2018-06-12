@@ -28,6 +28,49 @@ use cookie_base as cookie;
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
+use std::fmt;
+use std::error;
+use std::result;
+
+#[derive(Debug,Clone,PartialEq)]
+pub enum InterpreterError {
+    AttemptedLoadFromNonSPtr(cookie::Value),
+    AttemptedJumpToNonIPtr(cookie::Value),
+    TypeMismatchError(cookie::Type,cookie::Value),
+    BadInputType(cookie::Type),
+    StackUnderflow,
+    StackOverflow,
+    UndefinedLabel(String),
+    DebuggerError(String),
+}
+
+impl fmt::Display for InterpreterError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl error::Error for InterpreterError {
+    fn description(&self) -> &str {
+        use self::InterpreterError::*;
+        match self {
+            &AttemptedLoadFromNonSPtr(_) => "Attempted to load value from non-SPtr (non stack address)",
+            &AttemptedJumpToNonIPtr(_) => "Attempted to jump to non-IPtr (non instruction address)",
+            &TypeMismatchError(_,_) => "Got value of unexpected type",
+            &BadInputType(_) => "Cannot read input of given type",
+            &StackUnderflow => "Attempted to pop value but stack is empty",
+            &StackOverflow => "Attempted to push value but stack is full",
+            &UndefinedLabel(_) => "Attempted to reference a label that does not exist",
+            &DebuggerError(_) => "Error occured in debugger"
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        None
+    }
+}
+
+pub type Result<T> = result::Result<T, InterpreterError>;
 
 pub type InstructionList = Vec<cookie::Instruction>;
 pub type Stack = Vec<cookie::Value>;
@@ -53,10 +96,10 @@ pub struct Thread<'a> {
 }
 
 macro_rules! expect_value {
-    ($expr:expr, $ctor:ident, $($args:tt),+) => (
+    ($expr:expr, $ctor:ident, $err:expr) => (
         match $expr {
             cookie::Value::$ctor(v) => Ok(v),
-            v => Err(format!($($args),+, bad_value = v))
+            v => Err($err)
         }
     )
 }
@@ -74,7 +117,7 @@ impl<'a> Thread<'a> {
                 }
     }
 
-    pub fn exec(&mut self) -> Result<Option<cookie::Value>, String> {
+    pub fn exec(&mut self) -> Result<Option<cookie::Value>> {
         while self.pc < self.instructions.len() {
             let inst =  &self.instructions[self.pc];
             self.exec_instruction(&inst)?;
@@ -82,7 +125,7 @@ impl<'a> Thread<'a> {
         return Ok(self.stack.pop());
     }
 
-    fn exec_instruction(&mut self, inst: &cookie::Instruction) -> Result<(), String> {
+    fn exec_instruction(&mut self, inst: &cookie::Instruction) -> Result<()> {
         use cookie_base::Instruction::*;
         self.pc = match inst {
             PUSHR(reg) => {
@@ -99,13 +142,15 @@ impl<'a> Thread<'a> {
             },
             POP => { self.pop()?; self.pc + 1 },
             LOADFROM(dest, src) => {
-                let addr = expect_value!(self.get_value(src)?, SPtr, "Cannot load from non-SPtr value {bad_value}")?;
+                let src_val = self.get_value(src)?;
+                let addr = expect_value!(src_val, SPtr, InterpreterError::AttemptedLoadFromNonSPtr(src_val))?;
                 let val = self.stack[addr - 1];
                 self.put_value(dest, val)?;
                 self.pc + 1
             },
             STORETO(dest, src) => {
-                let addr = expect_value!(self.get_value(dest)?, SPtr, "Cannot load from non-SPtr value {bad_value}")?;
+                let dest_val = self.get_value(dest)?;
+                let addr = expect_value!(dest_val, SPtr, InterpreterError::AttemptedLoadFromNonSPtr(dest_val))?;
                 let val = self.get_value(src)?;
                 self.stack[addr - 1] = val;
                 self.pc + 1
@@ -125,11 +170,12 @@ impl<'a> Thread<'a> {
             },
             JUMP(label) => *self.get_label(label)?,
             DJUMP(src) => {
-                expect_value!(self.get_value(src)?, IPtr, "Cannot jump to non-IPtr value {bad_value}")?
+                let src_val = self.get_value(src)?;
+                expect_value!(src_val, IPtr, InterpreterError::AttemptedJumpToNonIPtr(src_val))?
             },
             BRANCHON(imm, label, src) => {
-                let val = self.get_value(src)?;
-                let condition = expect_value!(cookie::BinaryOp::EQ.apply_to(*imm, val)?, Bool, "Failed to evaluate branch condition; got {bad_value}")?;
+                let val = cookie::BinaryOp::EQ.apply_to(*imm, self.get_value(src)?)?;
+                let condition = expect_value!(val, Bool, InterpreterError::TypeMismatchError(cookie::Type::Bool, val))?;
                 if condition { *self.get_label(label)? } else { self.pc + 1 }
             },
             PRINT(src) => {
@@ -172,7 +218,7 @@ impl<'a> Thread<'a> {
                         io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
                         Value::Char(input.chars().nth(0).unwrap())
                     }
-                    _ => return Err(format!("Cannot do read of time: {}", t))
+                    _ => return Err(InterpreterError::BadInputType(t))
                 };
                 self.put_value(dest, val)?;
                 self.pc + 1
@@ -182,19 +228,19 @@ impl<'a> Thread<'a> {
         return Ok(());
     }
 
-    fn do_pushr(&mut self, reg: &cookie::RegisterName) -> Result<(), String> {
+    fn do_pushr(&mut self, reg: &cookie::RegisterName) -> Result<()> {
         let val = self.register_get(*reg)?;
         self.stack.push(val);
         Ok(())
     }
 
-    fn do_popr(&mut self, reg: &cookie::RegisterName) -> Result<(), String> {
+    fn do_popr(&mut self, reg: &cookie::RegisterName) -> Result<()> {
         let val = self.pop()?;
         self.register_put(*reg, val)?;
         Ok(())
     }
 
-    fn get_value(&mut self, loc: &cookie::Loc) -> Result<cookie::Value, String> {
+    fn get_value(&mut self, loc: &cookie::Loc) -> Result<cookie::Value> {
         use self::cookie::Loc;
         match loc {
             Loc::Stack => self.pop(),
@@ -202,7 +248,7 @@ impl<'a> Thread<'a> {
         }
     }
 
-    fn put_value(&mut self, loc: &cookie::Loc, val: cookie::Value) -> Result<(), String> {
+    fn put_value(&mut self, loc: &cookie::Loc, val: cookie::Value) -> Result<()> {
         use self::cookie::Loc;
         match loc {
             Loc::Stack => { self.stack.push(val); Ok(()) },
@@ -210,7 +256,7 @@ impl<'a> Thread<'a> {
         }
     }
 
-    fn register_get(&mut self, reg: cookie::RegisterName) -> Result<cookie::Value, String> {
+    fn register_get(&mut self, reg: cookie::RegisterName) -> Result<cookie::Value> {
         use self::cookie::Value;
         use self::cookie::RegisterName;
         match reg {
@@ -221,39 +267,39 @@ impl<'a> Thread<'a> {
         }
     }
 
-    fn register_put(&mut self, reg: cookie::RegisterName, val: cookie::Value) -> Result<(), String> {
+    fn register_put(&mut self, reg: cookie::RegisterName, val: cookie::Value) -> Result<()> {
         use self::cookie::Value;
         use self::cookie::RegisterName;
         match reg {
             RegisterName::StackPointer => {
-                let v = expect_value!(val, SPtr, "Expecting SPtr value but got {bad_value} instead.")?;
+                let v = expect_value!(val, SPtr, InterpreterError::TypeMismatchError(cookie::Type::SPtr, val))?;
                 self.stack.resize(v, Value::Void);
                 Ok(())
             }
             RegisterName::FramePointer => {
-                let v = expect_value!(val, SPtr, "Expecting SPtr value but got {bad_value} instead.")?;
+                let v = expect_value!(val, SPtr, InterpreterError::TypeMismatchError(cookie::Type::SPtr, val))?;
                 self.fp = v;
                 Ok(())
             }
             RegisterName::ProgramCounter => {
-                self.pc = expect_value!(val, IPtr, "Expecting IPtr value but got {bad_value} instead")?;
+                self.pc = expect_value!(val, IPtr, InterpreterError::TypeMismatchError(cookie::Type::IPtr, val))?;
                 Ok(())
             }
             _ => Err(format!("Unimplemented register access {}", reg))
         }
     }
 
-    fn pop(&mut self) -> Result<cookie::Value, String> {
-        self.stack.pop().ok_or("Cannot pop value from stack: stack is empty.".to_string())
+    fn pop(&mut self) -> Result<cookie::Value> {
+        self.stack.pop().ok_or(InterpreterError::StackUnderflow)
     }
 
-    fn get_label(&self, label: &str) -> cookie::Result<&usize> {
-        self.label_table.get(label).ok_or(format!("No label with name {}", label)).clone()
+    fn get_label(&self, label: &str) -> Result<&usize> {
+        self.label_table.get(label).ok_or(InterpreterError::UndefinedLabel(label.to_string()))
     }
 
     // debugger ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    pub fn debug(&mut self) -> Result<(), String> {
+    pub fn debug(&mut self) -> Result<()> {
         use std::cmp;
         use rustyline::error::ReadlineError;
         use rustyline::Editor;
@@ -266,7 +312,7 @@ impl<'a> Thread<'a> {
                 else {
                     let readline = prompt.readline("Program thread is still running, are you sure you want to quit (y/n): ");
                     match readline {
-                        Ok(ref r) if r == "y" => return Err("Program terminated by user.".to_string()),
+                        Ok(ref r) if r == "y" => return Err(InterpreterError::DebuggerError("Program terminated by user.".to_string())),
                         _ => continue,
                     }
                 }
