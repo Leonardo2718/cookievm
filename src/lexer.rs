@@ -122,6 +122,12 @@ impl convert::From<num::ParseFloatError> for LexerError {
     }
 }
 
+impl convert::From<LexerError> for String {
+    fn from(error: LexerError) -> Self {
+        error.to_string()
+    }
+}
+
 pub struct Lexer<'a> {
     iter: Chars<'a>,
 }
@@ -140,12 +146,12 @@ impl<'a> Lexer<'a> {
                 skip_n!(self.iter,1);
                 s.push('.');
                 eat_while!(self.iter.by_ref(), is_num, |c:&char| s.push(*c));
-                let num = s.clone().parse::<f32>();
-                return Ok(num.map(|f:f32| Token::Float(f))?);
+                let f = s.clone().parse::<f32>()?;
+                return Ok(Token::Float(f));
             },
             _ => {
-                let num = s.clone().parse::<i32>();
-                return Ok(num.map(|i:i32| Token::Integer(i))?);
+                let i = s.clone().parse::<i32>()?;
+                return Ok(Token::Integer(i));
             }
         }
     }
@@ -163,8 +169,8 @@ impl<'a> Lexer<'a> {
         let mut s = String::new();
         let is_hex = |c:&char| c.is_digit(16);
         eat_while!(self.iter.by_ref(), is_hex, |c:&char| s.push(*c));
-        let addr = usize::from_str_radix(s.as_ref(), 16);
-        return Ok(addr.map(|a:usize| Token::Address(a))?);
+        let addr = usize::from_str_radix(s.as_ref(), 16)?;
+        return Ok(Token::Address(addr));
     }
 
     fn match_char(&mut self) -> Result {
@@ -192,8 +198,8 @@ impl<'a> Lexer<'a> {
             Some(c) if c.is_numeric() => {
                 let is_gpr = |c:&char| c.is_numeric();
                 eat_while!(self.iter, is_gpr, |c:&char| s.push(*c));
-                let reg_num = u8::from_str_radix(s.as_ref(), 10);
-                Ok(reg_num.map(|i:u8| Token::R(i))?)
+                let reg_num = u8::from_str_radix(s.as_ref(), 10)?;
+                Ok(Token::R(reg_num))
             },
             Some(c) if c.is_alphabetic() => {
                 let is_reg = |c:&char| c.is_alphabetic();
@@ -265,7 +271,8 @@ impl<'a> Iterator for Lexer<'a> {
                     let t = Some(self.match_char());
                     match self.iter.next() {
                         Some('\'') => return t,
-                        _ => emit_err!(LexerError::ExpectingMoreCharacters)
+                        Some(_) => emit_err!(LexerError::UnexpectedCharacter),
+                        None => emit_err!(LexerError::ExpectingMoreCharacters)
                     };
                 }
                 Some(&'$') => {
