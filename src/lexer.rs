@@ -24,10 +24,13 @@ License:
 
 */
 
-use cookie_base;
 use std::fmt;
 use std::iter::Iterator;
 use std::str::Chars;
+use std::num;
+use std::error;
+use std::result;
+use std::convert;
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum Token {
@@ -54,6 +57,34 @@ impl fmt::Display for Token {
     }
 }
 
+#[derive(Debug,Clone,PartialEq)]
+pub enum LexerError {
+    ExpectingMoreCharacters,
+    UnexpectedCharacter,
+    ParseIntError(num::ParseIntError),
+    ParseFloatError(num::ParseFloatError),
+}
+
+impl fmt::Display for LexerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl error::Error for LexerError {
+    fn description(&self) -> &str {
+        "Lexer Error"
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match self {
+            &LexerError::ParseIntError(ref e) => Some(e),
+            &LexerError::ParseFloatError(ref e) => Some(e),
+            _ => None
+        }
+    }
+}
+
 macro_rules! eat_while {
     ($iter:expr, $pred:expr, $eater:expr) => (
         loop {
@@ -77,7 +108,19 @@ macro_rules! peek {
     )
 }
 
-type Result = cookie_base::Result<Token>;
+type Result = result::Result<Token,LexerError>;
+
+impl convert::From<num::ParseIntError> for LexerError {
+    fn from(error: num::ParseIntError) -> Self {
+        LexerError::ParseIntError(error)
+    }
+}
+
+impl convert::From<num::ParseFloatError> for LexerError {
+    fn from(error: num::ParseFloatError) -> Self {
+        LexerError::ParseFloatError(error)
+    }
+}
 
 pub struct Lexer<'a> {
     iter: Chars<'a>,
@@ -98,11 +141,11 @@ impl<'a> Lexer<'a> {
                 s.push('.');
                 eat_while!(self.iter.by_ref(), is_num, |c:&char| s.push(*c));
                 let num = s.clone().parse::<f32>();
-                return num.map(|f:f32| Token::Float(f)).map_err(|e| e.to_string());
+                return Ok(num.map(|f:f32| Token::Float(f))?);
             },
             _ => {
                 let num = s.clone().parse::<i32>();
-                return num.map(|i:i32| Token::Integer(i)).map_err(|e| e.to_string());
+                return Ok(num.map(|i:i32| Token::Integer(i))?);
             }
         }
     }
@@ -112,7 +155,7 @@ impl<'a> Lexer<'a> {
         match t {
             Token::Float(f) => Ok(Token::Float(-f)),
             Token::Integer(i) => Ok(Token::Integer(-i)),
-            _ => Err(format!("Cannot take negative of non-integer/non-float token: {}", t))
+            _ => Err(LexerError::UnexpectedCharacter)
         }
     }
 
@@ -121,7 +164,7 @@ impl<'a> Lexer<'a> {
         let is_hex = |c:&char| c.is_digit(16);
         eat_while!(self.iter.by_ref(), is_hex, |c:&char| s.push(*c));
         let addr = usize::from_str_radix(s.as_ref(), 16);
-        return addr.map(|a:usize| Token::Address(a)).map_err(|e| e.to_string());
+        return Ok(addr.map(|a:usize| Token::Address(a))?);
     }
 
     fn match_char(&mut self) -> Result {
@@ -134,11 +177,11 @@ impl<'a> Lexer<'a> {
                     Some('n') => '\n',
                     Some('r') => '\r',
                     Some(c) => c,
-                    None => return Err("Unexpected end of character stream".to_string())
+                    None => return Err(LexerError::ExpectingMoreCharacters)
                 }
             },
             Some(c) => c,
-            _ => return Err("Unexpected end of character stream".to_string())
+            _ => return Err(LexerError::ExpectingMoreCharacters)
         };
         Ok(Token::Char(c))
     }
@@ -150,7 +193,7 @@ impl<'a> Lexer<'a> {
                 let is_gpr = |c:&char| c.is_numeric();
                 eat_while!(self.iter, is_gpr, |c:&char| s.push(*c));
                 let reg_num = u8::from_str_radix(s.as_ref(), 10);
-                reg_num.map(|i:u8| Token::R(i)).or(Err("Failed to parse GPR number".to_string()))
+                Ok(reg_num.map(|i:u8| Token::R(i))?)
             },
             Some(c) if c.is_alphabetic() => {
                 let is_reg = |c:&char| c.is_alphabetic();
@@ -159,10 +202,10 @@ impl<'a> Lexer<'a> {
                     "sp" => Ok(Token::SP),
                     "fp" => Ok(Token::FP),
                     "pc" => Ok(Token::PC),
-                    _ => Err("Unexpected end of character stream".to_string())
+                    _ => Err(LexerError::ExpectingMoreCharacters)
                 };
             }
-            _ => return Err("Unexpected end of character stream".to_string())
+            _ => return Err(LexerError::ExpectingMoreCharacters)
         }
     }
 
@@ -204,7 +247,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
 
         macro_rules! emit_err {
-            ($($err:expr),+) => ( return Some(Err(format!($($err),+))) )
+            ($err:expr) => ( return Some(Err($err)) )
         }
 
         loop {
@@ -222,7 +265,7 @@ impl<'a> Iterator for Lexer<'a> {
                     let t = Some(self.match_char());
                     match self.iter.next() {
                         Some('\'') => return t,
-                        _ => emit_err!("Unexpected end of character stream")
+                        _ => emit_err!(LexerError::ExpectingMoreCharacters)
                     };
                 }
                 Some(&'$') => {
@@ -241,7 +284,7 @@ impl<'a> Iterator for Lexer<'a> {
                     // A numeric character indicates the start of a number
                     return Some(self.match_num());
                 }
-                Some(c) => emit_err!("Unexpected character {}", c),
+                Some(c) => emit_err!(LexerError::UnexpectedCharacter),
                 None => { return None; }
             }
         }
