@@ -29,8 +29,6 @@ use std::result;
 use std::error;
 use std::convert;
 
-// pub type Result<T> = result::Result<T, String>;
-
 // cookie data types and value ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 macro_rules! define_types {
@@ -186,74 +184,23 @@ impl convert::From<ConversionError> for OpApplicationError {
 pub enum UnaryOp {
     NEG, NOT, CVT(Type)
 }
-// macro_rules! apply_unary {
-//     ($matcher:ident, $expr:expr, $res:ident, $op:tt) => {
-//         |err: String| match $expr {
-//             Value::$matcher(val) => Ok(Value::$res($op(val.clone()))),
-//             _ => Err(err)
-//         }
-//     }
-// }
 
 impl UnaryOp {
     pub fn apply_to(&self, val: Value) -> result::Result<Value,OpApplicationError> {
         let apply_err = OpApplicationError::BadUnaryOp(self.clone(),val);
-
-        // macro_rules! allow_cvt {
-        //     ($src:ident,$dest:ident) => {
-        //         Value::$src(v) => Value::$dest
-        //     }
-        // }
 
         let v = match self {
             UnaryOp::NEG => match val {
                 Value::I32(v) => Value::I32(-v),
                 Value::F32(v) => Value::F32(-v),
                 _ => return Err(apply_err),
-            }   //apply_err
-                // .or_else(apply_unary!(I32, val, I32, -))
-                // .or_else(apply_unary!(F32, val, F32, -)),
+            }
             UnaryOp::NOT => match val {
                 Value::Bool(v) => Value::Bool(!v),
                 Value::I32(v) => Value::I32(!v),
                 _ => return Err(apply_err),
             }
-                // apply_err
-                // .or_else(apply_unary!(Bool, val, Bool, !))
-                // .or_else(apply_unary!(I32, val, I32, !)),
             UnaryOp::CVT(t) => val.convert_to(*t)?
-            // UnaryOp::CVT(Type::I32) => val.convert_to(Type::I32)?,
-            //     // cvt_err!(Type::I32)
-            //     // .or_else(apply_unary!(I32, val, I32, (|v| v)))
-            //     // .or_else(apply_unary!(F32, val, I32, (|v| v as i32)))
-            //     // .or_else(apply_unary!(Char, val, I32, (|v| v as i32)))
-            //     // .or_else(apply_unary!(Bool, val, I32, (|v| v as i32)))
-            //     // .or_else(apply_unary!(IPtr, val, I32, (|v| v as i32)))
-            //     // .or_else(apply_unary!(SPtr, val, I32, (|v| v as i32))),
-            // UnaryOp::CVT(Type::F32) => val.convert_to(Type::F32)?,
-            //     // cvt_err!(Type::F32)
-            //     // .or_else(apply_unary!(I32, val, F32, (|v| v as f32)))
-            //     // .or_else(apply_unary!(F32, val, F32, (|v| v))),
-            // UnaryOp::CVT(Type::Char) => val.convert_to(Type::Char)?,
-            //     // cvt_err!(Type::Char)
-            //     // .or_else(apply_unary!(Char, val, Char, (|v| v))),
-            // UnaryOp::CVT(Type::Bool) => val.convert_to(Type::Bool)?,
-            //     // cvt_err!(Type::Bool)
-            //     // .or_else(apply_unary!(I32, val, Bool, (|v| v != 0)))
-            //     // .or_else(apply_unary!(F32, val, Bool, (|v| v != 0.0)))
-            //     // .or_else(apply_unary!(Char, val, Bool, (|v| v != '\0')))
-            //     // .or_else(apply_unary!(Bool, val, Bool, (|v| v)))
-            //     // .or_else(apply_unary!(IPtr, val, Bool, (|v| v != 0)))
-            //     // .or_else(apply_unary!(SPtr, val, Bool, (|v| v != 0))),
-            // UnaryOp::CVT(Type::IPtr) => val.convert_to(Type::IPtr)?,
-            //     // cvt_err!(Type::IPtr)
-            //     // .or_else(apply_unary!(I32, val, IPtr, (|v| v as usize)))
-            //     // .or_else(apply_unary!(IPtr, val, IPtr, (|v| v as usize))),
-            // UnaryOp::CVT(Type::SPtr) => val.convert_to(Type::SPtr)?,
-            //     // cvt_err!(Type::IPtr)
-            //     // .or_else(apply_unary!(I32, val, SPtr, (|v| v as usize)))
-            //     // .or_else(apply_unary!(SPtr, val, SPtr, (|v| v as usize))),
-            // UnaryOp::CVT(Type::Void) => val.convert_to(Type::Void)?//cvt_err!(Type::Void)
         };
 
         return Ok(v);
@@ -415,8 +362,6 @@ pub enum Instruction {
     EXIT,
 }
 
-// impl From<&str> for Instruction
-
 // tests ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[cfg(test)]
@@ -425,42 +370,6 @@ mod test {
     use super::UnaryOp::*;
     use super::BinaryOp::*;
     const DEFAULT_ERROR: OpApplicationError = OpApplicationError::BadBinaryOp(BinaryOp::ADD, Value::I32(0), Value::I32(0));
-
-    // #[test]
-    // fn apply_unary_test_1() {
-    //     let val = Value::I32(1);
-    //     assert_eq!(apply_unary!(I32, val, I32, -)(DEFAULT_ERROR).unwrap(), Value::I32(-1));
-    // }
-
-    // #[test]
-    // fn apply_unary_test_2() {
-    //     let val = Value::F32(3.14159);
-    //     assert_eq!(apply_unary!(F32, val, F32, -)(DEFAULT_ERROR).unwrap(), Value::F32(-3.14159));
-    // }
-
-    // #[test]
-    // fn apply_unary_test_3() {
-    //     let val = Value::Bool(false);
-    //     assert_eq!(apply_unary!(Bool, val, Bool, !)(DEFAULT_ERROR).unwrap(), Value::Bool(true));
-    // }
-
-    // #[test]
-    // fn apply_unary_test_5() {
-    //     let val = Value::Char('c');
-    //     assert!(apply_unary!(I32, val, I32, -)(DEFAULT_ERROR).is_err());
-    // }
-
-    // #[test]
-    // fn apply_unary_test_6() {
-    //     let val = Value::I32(1);
-    //     assert!(apply_unary!(Bool, val, Bool, !)(DEFAULT_ERROR).is_err());
-    // }
-
-    // #[test]
-    // fn apply_unary_test_7() {
-    //     let val = Value::I32(3);
-    //     assert!(apply_unary!(F32, val, F32, -)(DEFAULT_ERROR).is_err());
-    // }
 
     #[test]
     fn apply_binary_test_1() {
