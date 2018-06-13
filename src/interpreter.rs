@@ -29,10 +29,13 @@ use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::fmt;
+use std::num;
+use std::str;
 use std::error;
 use std::result;
+use std::convert;
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug)]
 pub enum InterpreterError {
     AttemptedLoadFromNonSPtr(cookie::Value),
     AttemptedJumpToNonIPtr(cookie::Value),
@@ -42,6 +45,12 @@ pub enum InterpreterError {
     StackOverflow,
     UndefinedLabel(String),
     DebuggerError(String),
+    ParseInputIntError(num::ParseIntError),
+    ParseInputFloatError(num::ParseFloatError),
+    ParseInputBoolError(str::ParseBoolError),
+    OperationError(cookie::OpApplicationError),
+    IOError(io::Error),
+    UseOfUnimplementedFeature(String),
 }
 
 impl fmt::Display for InterpreterError {
@@ -61,12 +70,55 @@ impl error::Error for InterpreterError {
             &StackUnderflow => "Attempted to pop value but stack is empty",
             &StackOverflow => "Attempted to push value but stack is full",
             &UndefinedLabel(_) => "Attempted to reference a label that does not exist",
-            &DebuggerError(_) => "Error occured in debugger"
+            &DebuggerError(_) => "Error occured in debugger",
+            &ParseInputIntError(_) => "Error parsing input (expecting integral value)",
+            &ParseInputFloatError(_) => "Error parsing input (expecting floating-point value)",
+            &ParseInputBoolError(_) => "Error parsing input (expecting boolean value)",
+            &OperationError(_) => "Error occured while performing operation (see cause)",
+            &IOError(_) => "Internal I/O error (see cause)",
+            &UseOfUnimplementedFeature(_) => "Attempted to use an unimplemented feature",
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
-        None
+        match self {
+            &InterpreterError::ParseInputIntError(ref e) => Some(e),
+            &InterpreterError::ParseInputFloatError(ref e) => Some(e),
+            &InterpreterError::ParseInputBoolError(ref e) => Some(e),
+            &InterpreterError::OperationError(ref e) => Some(e),
+            &InterpreterError::IOError(ref e) => Some(e),
+            _ => None
+        }
+    }
+}
+
+impl convert::From<cookie::OpApplicationError> for InterpreterError {
+    fn from(error: cookie::OpApplicationError) -> Self {
+        InterpreterError::OperationError(error)
+    }
+}
+
+impl convert::From<io::Error> for InterpreterError {
+    fn from(error: io::Error) -> Self {
+        InterpreterError::IOError(error)
+    }
+}
+
+impl convert::From<num::ParseIntError> for InterpreterError {
+    fn from(error: num::ParseIntError) -> Self {
+        InterpreterError::ParseInputIntError(error)
+    }
+}
+
+impl convert::From<num::ParseFloatError> for InterpreterError {
+    fn from(error: num::ParseFloatError) -> Self {
+        InterpreterError::ParseInputFloatError(error)
+    }
+}
+
+impl convert::From<str::ParseBoolError> for InterpreterError {
+    fn from(error: str::ParseBoolError) -> Self {
+        InterpreterError::ParseInputBoolError(error)
     }
 }
 
@@ -190,8 +242,8 @@ impl<'a> Thread<'a> {
                 {
                     let stdout = io::stdout();
                     let mut handle = stdout.lock();
-                    handle.write(s.as_bytes()).map_err(|e| e.to_string())?;
-                    handle.flush().map_err(|e| e.to_string())?;
+                    handle.write(s.as_bytes())?;
+                    handle.flush()?;
                 }
                 self.pc + 1
             },
@@ -202,8 +254,8 @@ impl<'a> Thread<'a> {
                 macro_rules! read_val {
                     ($t:tt) => ({
                         let mut input = String::new();
-                        io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
-                        input.trim().parse::<$t>().map_err(|e| e.to_string())?
+                        io::stdin().read_line(&mut input)?;
+                        input.trim().parse::<$t>()?
                     })
                 }
 
@@ -215,10 +267,10 @@ impl<'a> Thread<'a> {
                     &Type::Bool => Value::Bool(read_val!(bool)),
                     &Type::Char => {
                         let mut input = String::new();
-                        io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
+                        io::stdin().read_line(&mut input)?;
                         Value::Char(input.chars().nth(0).unwrap())
                     }
-                    _ => return Err(InterpreterError::BadInputType(t))
+                    _ => return Err(InterpreterError::BadInputType(*t))
                 };
                 self.put_value(dest, val)?;
                 self.pc + 1
@@ -263,7 +315,7 @@ impl<'a> Thread<'a> {
             RegisterName::StackPointer => Ok(Value::SPtr(self.stack.len())),
             RegisterName::FramePointer => Ok(Value::SPtr(self.fp)),
             RegisterName::ProgramCounter => Ok(Value::IPtr(self.pc)),
-            _ => Err(format!("Unimplemented register access: {}", reg))
+            _ => Err(InterpreterError::UseOfUnimplementedFeature(format!("Unimplemented register access: {}", reg)))
         }
     }
 
@@ -285,7 +337,7 @@ impl<'a> Thread<'a> {
                 self.pc = expect_value!(val, IPtr, InterpreterError::TypeMismatchError(cookie::Type::IPtr, val))?;
                 Ok(())
             }
-            _ => Err(format!("Unimplemented register access {}", reg))
+            _ => Err(InterpreterError::UseOfUnimplementedFeature(format!("Unimplemented register access {}", reg)))
         }
     }
 
