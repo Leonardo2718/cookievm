@@ -226,24 +226,6 @@ pub enum BinaryOp {
     EQ, LT, LE, GT, GE,
 }
 
-macro_rules! apply_binary {
-    ($lmatch:ident, $lhs:expr, $rmatch:ident, $rhs:expr, $res:ident, $op:tt) => (
-        |err: OpApplicationError| match ($lhs, $rhs) {
-            (Value::$lmatch(l), Value::$rmatch(r)) => Ok(Value::$res(l.clone() $op r.clone())),
-            _ => Err(err)
-        }
-    )
-}
-
-macro_rules! apply_binaryf {
-    ($lmatch:ident, $lhs:expr, $rmatch:ident, $rhs:expr, $res:ident, $op:tt) => (
-        |err: OpApplicationError| match ($lhs, $rhs) {
-            (Value::$lmatch(l), Value::$rmatch(r)) => Ok(Value::$res($op(l.clone(), r.clone()))),
-            _ => Err(err)
-        }
-    )
-}
-
 fn ptr_add(lhs: usize, rhs:i32) -> usize {
     if rhs < 0 { lhs - (-rhs as usize) }
     else { lhs + rhs as usize }
@@ -257,76 +239,84 @@ fn ptr_sub(lhs: usize, rhs:i32) -> usize {
 impl BinaryOp {
     pub fn apply_to(&self, lhs: Value, rhs: Value) -> result::Result<Value, OpApplicationError> {
         let apply_err = Err(OpApplicationError::BadBinaryOp(self.clone(), lhs, rhs));
+
+        macro_rules! implement_for {
+            [ $( ($l:ident, $r:ident, $res:ident, $op:tt) ),+ ] => {
+                match (lhs, rhs) {
+                    $( (Value::$l(l), Value::$r(r)) => Ok(Value::$res($op(l,r))) ),+ ,
+                    _ => apply_err
+                }
+            };
+        }
+
         match self {
-            BinaryOp::ADD => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, I32, +))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, F32, +))
-                .or_else(apply_binaryf!(
-                    IPtr, lhs,
-                    I32, rhs,
-                    IPtr, ptr_add))
-                .or_else(apply_binaryf!(
-                    SPtr, lhs,
-                    I32, rhs,
-                    SPtr, ptr_add)),
-            BinaryOp::SUB => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, I32, -))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, F32, -))
-                .or_else(apply_binaryf!(
-                    IPtr, lhs,
-                    I32, rhs,
-                    IPtr, ptr_sub))
-                .or_else(apply_binaryf!(
-                    SPtr, lhs,
-                    I32, rhs,
-                    SPtr, ptr_sub)),
-            BinaryOp::MUL => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, I32, *))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, F32, *)),
-            BinaryOp::DIV => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, I32, /))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, F32, /)),
-            BinaryOp::MOD => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, I32, %))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, F32, %)),
-
-            BinaryOp::EQ => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, ==))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, ==))
-                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, ==))
-                .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, ==))
-                .or_else(apply_binary!(IPtr, lhs, IPtr, rhs, Bool, ==))
-                .or_else(apply_binary!(SPtr, lhs, SPtr, rhs, Bool, ==))
-                .or_else(|err: OpApplicationError| match (lhs, rhs) {
-                    (Value::Void, Value::Void) => Ok(Value::Bool(true)),
-                    _ => Err(err)
-                }),
-            BinaryOp::LT => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, <))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, <))
-                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, <)),
-            BinaryOp::LE => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, <=))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, <=))
-                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, <=)),
-            BinaryOp::GT => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, >))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, >))
-                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, >)),
-            BinaryOp::GE => apply_err
-                .or_else(apply_binary!(I32, lhs, I32, rhs, Bool, >=))
-                .or_else(apply_binary!(F32, lhs, F32, rhs, Bool, >=))
-                .or_else(apply_binary!(Char, lhs, Char, rhs, Bool, >=)),
-
-            BinaryOp::AND => apply_err
-                .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, &&))
-                .or_else(apply_binary!(I32, lhs, I32, rhs, I32, &)),
-            BinaryOp::OR => apply_err
-                .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, ||))
-                .or_else(apply_binary!(I32, lhs, I32, rhs, I32, |)),
-            BinaryOp::XOR => apply_err
-                .or_else(apply_binary!(Bool, lhs, Bool, rhs, Bool, !=))
-                .or_else(apply_binary!(I32, lhs, I32, rhs, I32, ^)),
+            BinaryOp::ADD => implement_for![
+                (I32, I32, I32, (|l,r| l + r)),
+                (F32, F32, F32, (|l,r| l + r)),
+                (IPtr, I32, IPtr, ptr_add),
+                (SPtr, I32, SPtr, ptr_add)
+            ],
+            BinaryOp::SUB => implement_for![
+                (I32, I32, I32, (|l,r| l - r)),
+                (F32, F32, F32, (|l,r| l - r)),
+                (IPtr, I32, IPtr, ptr_sub),
+                (SPtr, I32, SPtr, ptr_sub)
+            ],
+            BinaryOp::MUL => implement_for![
+                (I32, I32, I32, (|l,r| l * r)),
+                (F32, F32, F32, (|l,r| l * r))
+            ],
+            BinaryOp::DIV =>implement_for![
+                (I32, I32, I32, (|l,r| l / r)),
+                (F32, F32, F32, (|l,r| l / r))
+            ],
+            BinaryOp::MOD => implement_for![
+                (I32, I32, I32, (|l,r| l % r)),
+                (F32, F32, F32, (|l,r| l % r))
+            ],
+            BinaryOp::EQ => match (lhs, rhs) {
+                (Value::Void, Value::Void) => Ok(Value::Bool(true)),
+                _ => implement_for![
+                    (I32, I32, Bool, (|l,r| l == r)),
+                    (F32, F32, Bool, (|l,r| l == r)),
+                    (Char, Char, Bool, (|l,r| l == r)),
+                    (Bool, Bool, Bool, (|l,r| l == r)),
+                    (IPtr, IPtr, Bool, (|l,r| l == r)),
+                    (SPtr, SPtr, Bool, (|l,r| l == r))
+                ]
+            },
+            BinaryOp::LT => implement_for![
+                (I32, I32, Bool, (|l,r| l < r)),
+                (F32, F32, Bool, (|l,r| l < r)),
+                (Char, Char, Bool, (|l,r| l < r))
+            ],
+            BinaryOp::LE => implement_for![
+                (I32, I32, Bool, (|l,r| l <= r)),
+                (F32, F32, Bool, (|l,r| l <= r)),
+                (Char, Char, Bool, (|l,r| l <= r))
+            ],
+            BinaryOp::GT => implement_for![
+                (I32, I32, Bool, (|l,r| l > r)),
+                (F32, F32, Bool, (|l,r| l > r)),
+                (Char, Char, Bool, (|l,r| l > r))
+            ],
+            BinaryOp::GE => implement_for![
+                (I32, I32, Bool, (|l,r| l >= r)),
+                (F32, F32, Bool, (|l,r| l >= r)),
+                (Char, Char, Bool, (|l,r| l >= r))
+            ],
+            BinaryOp::AND => implement_for![
+                (Bool, Bool, Bool, (|l,r| l && r)),
+                (I32, I32, I32, (|l,r| l & r))
+            ],
+            BinaryOp::OR => implement_for![
+                (Bool, Bool, Bool, (|l,r| l || r)),
+                (I32, I32, I32, (|l,r| l | r))
+            ],
+            BinaryOp::XOR => implement_for![
+                (Bool, Bool, Bool, (|l,r| l != r)),
+                (I32, I32, I32, (|l,r| l ^ r))
+            ],
         }
     }
 }
@@ -369,58 +359,6 @@ mod test {
     use super::*;
     use super::UnaryOp::*;
     use super::BinaryOp::*;
-    const DEFAULT_ERROR: OpApplicationError = OpApplicationError::BadBinaryOp(BinaryOp::ADD, Value::I32(0), Value::I32(0));
-
-    #[test]
-    fn apply_binary_test_1() {
-        let lhs = Value::I32(1);
-        let rhs = Value::I32(2);
-        assert_eq!(apply_binary!(I32, lhs, I32, rhs, I32, +)(DEFAULT_ERROR).unwrap(), Value::I32(3));
-    }
-
-    #[test]
-    fn apply_binary_test_2() {
-        let lhs_val = 3.14159;
-        let rhs_val = 2.71828;
-        let lhs = Value::F32(lhs_val);
-        let rhs = Value::F32(rhs_val);
-        assert_eq!(apply_binary!(F32, lhs, F32, rhs, F32, -)(DEFAULT_ERROR).unwrap(), Value::F32(lhs_val - rhs_val));
-    }
-
-    #[test]
-    fn apply_binary_test_3() {
-        let lhs = Value::Char('a');
-        let rhs = Value::Char('b');
-        assert_eq!(apply_binary!(Char, lhs, Char, rhs, Bool, <)(DEFAULT_ERROR).unwrap(), Value::Bool(true));
-    }
-
-    #[test]
-    fn apply_binary_test_4() {
-        let lhs = Value::I32(2);
-        let rhs = Value::I32(4);
-        assert_eq!(apply_binary!(I32, lhs, I32, rhs, I32, |)(DEFAULT_ERROR).unwrap(), Value::I32(6));
-    }
-
-    #[test]
-    fn apply_binary_test_5() {
-        let lhs = Value::F32(3.14);
-        let rhs = Value::F32(3.14);
-        assert_eq!(apply_binary!(F32, lhs, F32, rhs, Bool, ==)(DEFAULT_ERROR).unwrap(), Value::Bool(true));
-    }
-
-    #[test]
-    fn apply_binary_test_6() {
-        let lhs = Value::I32(3);
-        let rhs = Value::I32(4);
-        assert!(apply_binary!(F32, lhs, F32, rhs, F32, +)(DEFAULT_ERROR).is_err());
-    }
-
-    #[test]
-    fn apply_binary_test_7() {
-        let lhs = Value::Bool(true);
-        let rhs = Value::Bool(false);
-        assert!(apply_binary!(I32, lhs, I32, rhs, I32, &)(DEFAULT_ERROR).is_err());
-    }
 
     #[test]
     fn neg_test_1() {
