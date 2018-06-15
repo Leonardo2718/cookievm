@@ -347,160 +347,160 @@ mod test {
 
     #[test]
     fn parse_vinst_test_1() {
-        let inst = parse_vinst(&mut Lexer::new("Add".chars()), &parse_stackloc).unwrap();
+        let inst = parse_vinst(&mut Lexer::new("Add"), &parse_stackloc).unwrap();
         assert_eq!(inst, Instruction::BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_vinst_test_2() {
-        let inst = parse_vinst(&mut Lexer::new("EQ".chars()), &parse_stackloc).unwrap();
+        let inst = parse_vinst(&mut Lexer::new("EQ"), &parse_stackloc).unwrap();
         assert_eq!(inst, Instruction::BOp(BinaryOp::EQ, Loc::Stack, Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_vinst_test_3() {
-        let inst = parse_vinst(&mut Lexer::new("NOT".chars()), &parse_stackloc).unwrap();
+        let inst = parse_vinst(&mut Lexer::new("NOT"), &parse_stackloc).unwrap();
         assert_eq!(inst, Instruction::UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_vinst_test_4() {
-        assert!(parse_vinst(&mut Lexer::new("foo".chars()), &parse_stackloc).is_err());
+        assert!(parse_vinst(&mut Lexer::new("foo"), &parse_stackloc).is_err());
     }
 
     #[test]
     fn parse_vinst_test_5() {
-        let inst = parse_vinst(&mut Lexer::new("CVT F32".chars()), &parse_stackloc).unwrap();
+        let inst = parse_vinst(&mut Lexer::new("CVT F32"), &parse_stackloc).unwrap();
         assert_eq!(inst, Instruction::UOp(UnaryOp::CVT(Type::F32), Loc::Stack, Loc::Stack));
     }
 
     #[test]
     fn parse_value_test_1() {
-        let val = parse_value(&mut Lexer::new("I32(3)".chars())).unwrap();
+        let val = parse_value(&mut Lexer::new("I32(3)")).unwrap();
         assert_eq!(val, Value::I32(3));
     }
 
     #[test]
     fn parse_value_test_2() {
-        let val = parse_value(&mut Lexer::new("F32(2.71828)".chars())).unwrap();
+        let val = parse_value(&mut Lexer::new("F32(2.71828)")).unwrap();
         assert_eq!(val, Value::F32(2.71828));
     }
 
     #[test]
     fn parse_value_test_3() {
-        let val = parse_value(&mut Lexer::new(r"Char('\\')".chars())).unwrap();
+        let val = parse_value(&mut Lexer::new(r"Char('\\')")).unwrap();
         assert_eq!(val, Value::Char('\\'));
     }
 
     #[test]
     fn parse_value_test_4() {
-        let val = parse_value(&mut Lexer::new("Bool(False)".chars())).unwrap();
+        let val = parse_value(&mut Lexer::new("Bool(False)")).unwrap();
         assert_eq!(val, Value::Bool(false));
     }
 
     #[test]
     fn parse_value_test_5() {
-        let val = parse_value(&mut Lexer::new("IPtr(0xabc)".chars())).unwrap();
+        let val = parse_value(&mut Lexer::new("IPtr(0xabc)")).unwrap();
         assert_eq!(val, Value::IPtr(0xabc));
     }
 
     #[test]
     fn parse_value_test_6() {
-        let val = parse_value(&mut Lexer::new("SPtr(0x123)".chars())).unwrap();
+        let val = parse_value(&mut Lexer::new("SPtr(0x123)")).unwrap();
         assert_eq!(val, Value::SPtr(0x123));
     }
 
     #[test]
     fn parse_value_test_7() {
-        let val = parse_value(&mut Lexer::new("Void".chars())).unwrap();
+        let val = parse_value(&mut Lexer::new("Void")).unwrap();
         assert_eq!(val, Value::Void);
     }
 
     #[test]
     fn parse_value_test_8() {
-        assert!(parse_value(&mut Lexer::new("foo".chars())).is_err());
+        assert!(parse_value(&mut Lexer::new("foo")).is_err());
     }
 
     #[test]
     fn parse_value_test_9() {
-        assert!(parse_value(&mut Lexer::new("I32(2.0)".chars())).is_err());
+        assert!(parse_value(&mut Lexer::new("I32(2.0)")).is_err());
     }
 
     #[test]
     fn parse_value_test_10() {
-        assert!(parse_value(&mut Lexer::new("F32(4)".chars())).is_err());
+        assert!(parse_value(&mut Lexer::new("F32(4)")).is_err());
     }
 
     #[test]
     fn parse_value_test_11() {
-        assert!(parse_value(&mut Lexer::new("Char(c)".chars())).is_err());
+        assert!(parse_value(&mut Lexer::new("Char(c)")).is_err());
     }
 
     #[test]
     fn parse_value_test_12() {
-        assert!(parse_value(&mut Lexer::new("Bool(foo)".chars())).is_err());
+        assert!(parse_value(&mut Lexer::new("Bool(foo)")).is_err());
     }
 
     #[test]
     fn parse_value_test_13() {
-        assert!(parse_value(&mut Lexer::new("I32()".chars())).is_err());
+        assert!(parse_value(&mut Lexer::new("I32()")).is_err());
     }
 
     #[test]
     fn parse_value_test_14() {
-        assert!(parse_value(&mut Lexer::new("F32 3.14".chars())).is_err());
+        assert!(parse_value(&mut Lexer::new("F32 3.14")).is_err());
     }
 
     #[test]
     fn parse_register_test_1() {
-        let reg = parse_register(&mut Lexer::new("$sp".chars())).unwrap();
+        let reg = parse_register(&mut Lexer::new("$sp")).unwrap();
         assert_eq!(reg, RegisterName::StackPointer);
     }
 
     #[test]
     fn parse_register_test_2() {
-        let reg = parse_register(&mut Lexer::new("$fp".chars())).unwrap();
+        let reg = parse_register(&mut Lexer::new("$fp")).unwrap();
         assert_eq!(reg, RegisterName::FramePointer);
     }
 
     #[test]
     fn parse_register_test_3() {
-        let reg = parse_register(&mut Lexer::new("$pc".chars())).unwrap();
+        let reg = parse_register(&mut Lexer::new("$pc")).unwrap();
         assert_eq!(reg, RegisterName::ProgramCounter);
     }
 
     #[test]
     fn parse_register_test_4() {
-        let reg = parse_register(&mut Lexer::new("$7".chars())).unwrap();
+        let reg = parse_register(&mut Lexer::new("$7")).unwrap();
         assert_eq!(reg, RegisterName::R(7));
     }
 
     #[test]
     fn parse_type_test_1() {
-        let t = parse_type(&mut Lexer::new("I32".chars())).unwrap();
+        let t = parse_type(&mut Lexer::new("I32")).unwrap();
         assert_eq!(t, Type::I32);
     }
 
     #[test]
     fn parse_type_test_2() {
-        let t = parse_type(&mut Lexer::new("Bool".chars())).unwrap();
+        let t = parse_type(&mut Lexer::new("Bool")).unwrap();
         assert_eq!(t, Type::Bool);
     }
 
     #[test]
     fn parse_type_test_3() {
-        let t = parse_type(&mut Lexer::new("Void".chars())).unwrap();
+        let t = parse_type(&mut Lexer::new("Void")).unwrap();
         assert_eq!(t, Type::Void);
     }
 
     #[test]
     fn parse_type_test_4() {
-        assert!(parse_type(&mut Lexer::new("bar".chars())).is_err());
+        assert!(parse_type(&mut Lexer::new("bar")).is_err());
     }
 
     #[test]
     fn parser_test_1() {
-        let (insts, labels) = parse(Lexer::new("pushc I32(3)".chars())).unwrap();
+        let (insts, labels) = parse(Lexer::new("pushc I32(3)")).unwrap();
         assert!(labels.is_empty());
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::I32(3)));
@@ -509,7 +509,7 @@ mod test {
 
     #[test]
     fn parser_test_2() {
-        let (insts, labels) = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) s.add".chars())).unwrap();
+        let (insts, labels) = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) s.add")).unwrap();
         assert!(labels.is_empty());
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(3.1)));
@@ -520,7 +520,7 @@ mod test {
 
     #[test]
     fn parsre_test_3() {
-        let (insts, labels) = parse(Lexer::new("jump L1 L1: pushc Bool(true)".chars())).unwrap();
+        let (insts, labels) = parse(Lexer::new("jump L1 L1: pushc Bool(true)")).unwrap();
         assert_eq!(labels.len(), 1);
         assert!(labels.contains_key("L1"));
         assert_eq!(*labels.get("L1").unwrap(), 1 as usize);
