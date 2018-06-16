@@ -32,11 +32,50 @@ use std::error;
 use std::result;
 use std::convert;
 
+#[derive(Debug,Clone,Copy)]
 pub struct Position<'a> {
     source: &'a str,
     position: usize,
     line: usize,
     column: usize
+}
+
+#[derive(Debug,Clone)]
+struct CharPos<'a> {
+    c: char,
+    pos: Position<'a>
+}
+
+#[derive(Debug,Clone)]
+struct CharPosIter<'a> {
+    current: char,
+    pos: Position<'a>,
+    iter: Chars<'a>
+}
+
+impl<'a> CharPosIter<'a> {
+    fn new<'b>(src: &'b str) -> CharPosIter<'b> {
+        CharPosIter{current: '\0', pos: Position{source: src, position: 1, line: 1, column: 1}, iter: src.chars()}
+    }
+}
+
+impl<'a> Iterator for CharPosIter<'a> {
+    type Item = CharPos<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.iter.next() {
+            Some(c) => {
+                self.pos.position += 1;
+                match self.current {
+                    '\n' => { self.pos.line += 1; self.pos.column = 1; }
+                    _ => { self.pos.column += 1; }
+                };
+                self.current = c;
+                Some(CharPos{c: self.current, pos: self.pos})
+            }
+            None => None
+        }
+    }
 }
 
 #[derive(Debug,Clone,PartialEq)]
@@ -78,33 +117,45 @@ impl fmt::Display for LexerError {
     }
 }
 
-impl error::Error for LexerError {
+#[derive(Debug,Clone)]
+pub struct Error<'a> {
+    err: LexerError,
+    pos: Position<'a>
+}
+
+impl<'a> error::Error for Error<'a> {
     fn description(&self) -> &str {
         "Lexer Error"
     }
 
     fn cause(&self) -> Option<&error::Error> {
-        match self {
-            &LexerError::ParseIntError(ref e) => Some(e),
-            &LexerError::ParseFloatError(ref e) => Some(e),
+        match self.err {
+            LexerError::ParseIntError(ref e) => Some(e),
+            LexerError::ParseFloatError(ref e) => Some(e),
             _ => None
         }
     }
 }
 
-type Result = result::Result<Token,LexerError>;
-
-impl convert::From<num::ParseIntError> for LexerError {
-    fn from(error: num::ParseIntError) -> Self {
-        LexerError::ParseIntError(error)
+impl<'a> fmt::Display for Error<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
-impl convert::From<num::ParseFloatError> for LexerError {
-    fn from(error: num::ParseFloatError) -> Self {
-        LexerError::ParseFloatError(error)
-    }
-}
+type Result<'a> = result::Result<Token,Error<'a>>;
+
+// impl convert::From<num::ParseIntError> for LexerError {
+//     fn from(error: num::ParseIntError) -> Self {
+//         LexerError::ParseIntError(error)
+//     }
+// }
+
+// impl convert::From<num::ParseFloatError> for LexerError {
+//     fn from(error: num::ParseFloatError) -> Self {
+//         LexerError::ParseFloatError(error)
+//     }
+// }
 
 impl convert::From<LexerError> for String {
     fn from(error: LexerError) -> Self {
@@ -113,9 +164,8 @@ impl convert::From<LexerError> for String {
 }
 
 pub struct Lexer<'a> {
-    current: char,
-    iter: Chars<'a>,
-    pos: Position<'a>
+    iter: CharPosIter<'a>,
+    token_pos: Position<'a>
 }
 
 macro_rules! eat_while {
@@ -129,31 +179,32 @@ macro_rules! eat_while {
     )
 }
 
+macro_rules! emit_err {
+    ($this:expr,$err:expr) => {
+        Err(Error{err:$err, pos: $this.token_pos})
+    };
+}
+
+macro_rules! ret_err {
+    ($this:expr,$err:expr) => {
+        return emit_err!($this, $err)
+    };
+}
+
 impl<'a> Lexer<'a> {
     pub fn new<'b>(src: &'b str) -> Lexer<'b> {
-        Lexer{current: '\0', iter: src.chars(), pos: Position{source: src, position: 1, line: 1, column: 1} }
+        Lexer{iter: CharPosIter::new(src), token_pos: Position{source: src, position: 1, line: 1, column: 1} }
     }
 
     pub fn next_char(&mut self) -> Option<char> {
-        match self.iter.next() {
-            Some(c) => {
-                self.pos.position += 1;
-                match self.current {
-                    '\n' => { self.pos.line += 1; self.pos.column = 1; }
-                    _ => { self.pos.column += 1; }
-                };
-                self.current = c;
-                Some(c)
-            }
-            None => None
-        }
+        self.iter.next().map(|i| i.c)
     }
 
     pub fn peek_char(&mut self) -> Option<char> {
-        self.iter.clone().peekable().peek().map(|c| c.clone())
+        self.iter.clone().peekable().peek().map(|i| i.c)
     }
 
-    fn match_decimal(&mut self, init: &str) -> Result {
+    fn match_decimal(&mut self, init: &str) -> Result<'a> {
         let mut s = String::from(init);
         let is_num = |c:char| c.is_digit(10);
         eat_while!(self, is_num, |c:char| s.push(c));
@@ -162,34 +213,34 @@ impl<'a> Lexer<'a> {
                 self.next_char();
                 s.push('.');
                 eat_while!(self, is_num, |c:char| s.push(c));
-                let f = s.clone().parse::<f32>()?;
+                let f = s.clone().parse::<f32>().map_err(|e| Error{err: LexerError::ParseFloatError(e), pos: self.token_pos})?;
                 return Ok(Token::Float(f));
             },
             _ => {
-                let i = s.clone().parse::<i32>()?;
+                let i = s.clone().parse::<i32>().map_err(|e| Error{err: LexerError::ParseIntError(e), pos: self.token_pos})?;
                 return Ok(Token::Integer(i));
             }
         }
     }
 
-    fn match_negative(&mut self) -> Result {
+    fn match_negative(&mut self) -> Result<'a> {
         let t = self.match_decimal("")?;
         match t {
             Token::Float(f) => Ok(Token::Float(-f)),
             Token::Integer(i) => Ok(Token::Integer(-i)),
-            _ => Err(LexerError::UnexpectedCharacter)
+            _ => ret_err!(self, LexerError::UnexpectedCharacter)
         }
     }
 
-    fn match_hex(&mut self) -> Result {
+    fn match_hex(&mut self) -> Result<'a> {
         let mut s = String::new();
         let is_hex = |c:char| c.is_digit(16);
         eat_while!(self, is_hex, |c:char| s.push(c));
-        let addr = usize::from_str_radix(s.as_ref(), 16)?;
+        let addr = usize::from_str_radix(s.as_ref(), 16).map_err(|e| Error{err: LexerError::ParseIntError(e), pos: self.token_pos})?;
         return Ok(Token::Address(addr));
     }
 
-    fn match_char(&mut self) -> Result {
+    fn match_char(&mut self) -> Result<'a> {
         let c = match self.next_char() {
             Some('\\') => {
                 match self.next_char() {
@@ -199,22 +250,22 @@ impl<'a> Lexer<'a> {
                     Some('n') => '\n',
                     Some('r') => '\r',
                     Some(c) => c,
-                    None => return Err(LexerError::ExpectingMoreCharacters)
+                    None => ret_err!(self, LexerError::ExpectingMoreCharacters)
                 }
             },
             Some(c) => c,
-            _ => return Err(LexerError::ExpectingMoreCharacters)
+            _ => ret_err!(self, LexerError::ExpectingMoreCharacters)
         };
         Ok(Token::Char(c))
     }
 
-    fn match_reg(&mut self) -> Result {
+    fn match_reg(&mut self) -> Result<'a> {
         let mut s = String::new();
         match self.peek_char() {
             Some(c) if c.is_numeric() => {
                 let is_gpr = |c:char| c.is_numeric();
                 eat_while!(self, is_gpr, |c:char| s.push(c));
-                let reg_num = u8::from_str_radix(s.as_ref(), 10)?;
+                let reg_num = u8::from_str_radix(s.as_ref(), 10).map_err(|e| Error{err: LexerError::ParseIntError(e), pos: self.token_pos})?;
                 Ok(Token::R(reg_num))
             },
             Some(c) if c.is_alphabetic() => {
@@ -224,14 +275,14 @@ impl<'a> Lexer<'a> {
                     "sp" => Ok(Token::SP),
                     "fp" => Ok(Token::FP),
                     "pc" => Ok(Token::PC),
-                    _ => Err(LexerError::ExpectingMoreCharacters)
+                    _ => emit_err!(self, LexerError::ExpectingMoreCharacters)
                 };
             }
-            _ => return Err(LexerError::ExpectingMoreCharacters)
+            _ => ret_err!(self, LexerError::ExpectingMoreCharacters)
         }
     }
 
-    fn match_ident(&mut self) -> Result {
+    fn match_ident(&mut self) -> Result<'a> {
         let mut s = String::new();
         let is_ident = |c:char| c.is_alphanumeric() || c == '_';
         eat_while!(self, is_ident, |c:char| s.push(c));
@@ -246,7 +297,7 @@ impl<'a> Lexer<'a> {
         };
     }
 
-    fn match_num(&mut self) -> Result {
+    fn match_num(&mut self) -> Result<'a> {
         // If the current character is 0 and the next one is "x",
         // then the number must be in hex, otherwise it is in decimal
         match self.peek_char() {
@@ -263,15 +314,11 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result;
+    type Item = Result<'a>;
 
-    fn next(&mut self) -> Option<Result> {
+    fn next(&mut self) -> Option<Result<'a>> {
         macro_rules! emit_token {
             ($token:expr) => ( return Some(Ok($token)) )
-        }
-
-        macro_rules! emit_err {
-            ($err:expr) => ( return Some(Err($err)) )
         }
 
         loop {
@@ -280,7 +327,7 @@ impl<'a> Iterator for Lexer<'a> {
                 Some(')') => { self.next_char(); emit_token!(Token::RParen); }
                 Some('.') => { self.next_char(); emit_token!(Token::Dot); }
                 Some(';') => { eat_while!(self, |c| c != '\n', |_| ()); self.next_char(); continue; }
-                Some('-') => { self.next_char(); return Some(self.match_negative()); }
+                Some('-') => { self.next_char(); let r = self.match_negative(); return Some(r); }
                 Some(c) if c.is_whitespace() => { self.next_char(); continue; }
                 Some('\'') => {
                     // when the current character is a ' , return the next character (or two if \ )
@@ -289,8 +336,8 @@ impl<'a> Iterator for Lexer<'a> {
                     let t = Some(self.match_char());
                     match self.next_char() {
                         Some('\'') => return t,
-                        Some(_) => emit_err!(LexerError::UnexpectedCharacter),
-                        None => emit_err!(LexerError::ExpectingMoreCharacters)
+                        Some(_) => return Some(emit_err!(self, LexerError::UnexpectedCharacter)),
+                        None => return Some(emit_err!(self, LexerError::ExpectingMoreCharacters))
                     };
                 }
                 Some('$') => {
@@ -309,7 +356,7 @@ impl<'a> Iterator for Lexer<'a> {
                     // A numeric character indicates the start of a number
                     return Some(self.match_num());
                 }
-                Some(c) => emit_err!(LexerError::UnexpectedCharacter),
+                Some(c) => return Some(emit_err!(self, LexerError::UnexpectedCharacter)),
                 None => { return None; }
             }
         }

@@ -26,6 +26,7 @@ License:
 
 use cookie_base::*;
 use interpreter::*;
+use lexer;
 use lexer::*;
 use std::iter::Iterator;
 use std::collections::HashMap;
@@ -34,21 +35,21 @@ use std::error;
 use std::result;
 use std::convert;
 
-#[derive(Debug,Clone,PartialEq)]
-pub enum ParserError {
+#[derive(Debug,Clone)]
+pub enum ParserError<'a> {
     UnexpectedToken,
     UnexpectedIdentifier,
     ExpectingMoreTokens,
-    LexerError(LexerError)
+    LexerError(lexer::Error<'a>)
 }
 
-impl fmt::Display for ParserError {
+impl<'a> fmt::Display for ParserError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl error::Error for ParserError {
+impl<'a> error::Error for ParserError<'a> {
     fn description(&self) -> &str {
         use self::ParserError::*;
         match self {
@@ -67,19 +68,19 @@ impl error::Error for ParserError {
     }
 }
 
-impl convert::From<LexerError> for ParserError {
-    fn from(error: LexerError) -> Self {
+impl<'a> convert::From<lexer::Error<'a>> for ParserError<'a> {
+    fn from<'b>(error: lexer::Error<'b>) -> ParserError<'b> {
         ParserError::LexerError(error)
     }
 }
 
-impl convert::From<ParserError> for String {
+impl<'a> convert::From<ParserError<'a>> for String {
     fn from(error: ParserError) -> Self {
         error.to_string()
     }
 }
 
-type Result<T> = result::Result<T, ParserError>;
+type Result<'a, T> = result::Result<T, ParserError<'a>>;
 
 macro_rules! unexpected_token ( ($t:expr)  => (Err(ParserError::UnexpectedToken)) );
 macro_rules! unexpected_id    ( ($id:expr) => (Err(ParserError::UnexpectedIdentifier)) );
@@ -107,7 +108,7 @@ macro_rules! eat_token {
     })
 }
 
-fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<Value> {
+fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
     macro_rules! parse_as (
         ($id:tt, $val:tt) => ({
             eat_token_!(lexer, LParen)?;
@@ -133,7 +134,7 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<Value> {
     }
 }
 
-fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<RegisterName> {
+fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<'a, RegisterName> {
     match lexer.next().transpose()? {
         Some(Token::SP) => Ok(RegisterName::StackPointer),
         Some(Token::FP) => Ok(RegisterName::FramePointer),
@@ -144,7 +145,7 @@ fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<RegisterName> {
     }
 }
 
-fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<Type> {
+fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
     match lexer.next().transpose()? {
         Some(Token::Void) => Ok(Type::Void),
         Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
@@ -161,13 +162,13 @@ fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<Type> {
     }
 }
 
-type LocParser<'a> = Fn(&mut Lexer<'a>) -> Result<Loc>;
+type LocParser<'a> = Fn(&mut Lexer<'a>) -> Result<'a, Loc>;
 
 /*
 This function acts as a continuation for parsing a register location
 in a v-instruction.
 */
-fn parse_regloc<'a>(lexer: &mut Lexer<'a>) -> Result<Loc> {
+fn parse_regloc<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Loc> {
     Ok(Loc::Reg(parse_register(lexer)?))
 }
 
@@ -177,7 +178,7 @@ continuation for parsing a stack location in a v-instruction.
 Since stack locactions are implicit, not tokens are ever
 consumed on invocation.
 */
-fn parse_stackloc<'a>(_: &mut Lexer<'a>) -> Result<Loc> {
+fn parse_stackloc<'a>(_: &mut Lexer<'a>) -> Result<'a, Loc> {
     Ok(Loc::Stack)
 }
 
@@ -189,7 +190,7 @@ is found, the matching instruction is returned, consuming the
 tokens necessary to completely parse the instruction. If no
 match is found, None is returned and no tokens are consumed.
 */
-fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<Option<Instruction>> {
+fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'a, Option<Instruction>> {
     use cookie_base::Instruction::*;
     let inst = match ident.to_lowercase().as_ref() {
         "djump" => {
@@ -220,7 +221,7 @@ fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc: &LocPar
 Helper for parsing an identifier as a v-instruction that takes
 two location argument.
 */
-fn parse_as_vinst2<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>) -> Result<Option<Instruction>> {
+fn parse_as_vinst2<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>) -> Result<'a, Option<Instruction>> {
     use cookie_base::Instruction::*;
     use cookie_base::UnaryOp::*;
 
@@ -260,7 +261,7 @@ fn parse_as_vinst2<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocPa
 Helper for parsing an identifier as a v-instruction that takes
 three location arguments.
 */
-fn parse_as_vinst3<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>, parse_loc3: &LocParser<'a>) -> Result<Option<Instruction>> {
+fn parse_as_vinst3<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>, parse_loc3: &LocParser<'a>) -> Result<'a, Option<Instruction>> {
     use cookie_base::Instruction::*;
     use cookie_base::BinaryOp::*;
 
@@ -292,7 +293,7 @@ fn parse_as_vinst3<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocPa
     Ok(inst)
 }
 
-fn parse_vinst<'a>(lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<Instruction> {
+fn parse_vinst<'a>(lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'a, Instruction> {
     let id = eat_token!(lexer, Ident)?;
     parse_as_vinst1(&id, lexer, parse_loc).transpose()
         .or_else(|| parse_as_vinst2(&id, lexer, parse_loc, parse_loc).transpose())
