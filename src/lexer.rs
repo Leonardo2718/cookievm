@@ -40,6 +40,12 @@ pub struct Position<'a> {
     column: usize
 }
 
+impl<'a> fmt::Display for Position<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "(line {}, columnt {})", self.line, self.column)
+    }
+}
+
 #[derive(Debug,Clone)]
 struct CharPos<'a> {
     c: char,
@@ -106,7 +112,7 @@ impl fmt::Display for Token {
 #[derive(Debug,Clone,PartialEq)]
 pub enum LexerError {
     ExpectingMoreCharacters,
-    UnexpectedCharacter,
+    UnexpectedCharacter(char),
     ParseIntError(num::ParseIntError),
     ParseFloatError(num::ParseFloatError),
 }
@@ -125,7 +131,13 @@ pub struct Error<'a> {
 
 impl<'a> error::Error for Error<'a> {
     fn description(&self) -> &str {
-        "Lexer Error"
+        use self::LexerError::*;
+        match self.err {
+            ExpectingMoreCharacters => "Lexer expected more characters for a complete token",
+            UnexpectedCharacter(c) => "Lexer encountered an unexpected character",
+            ParseIntError(_) => "Lexer failed to parse character sequence as an integer value (see cause)",
+            ParseFloatError(_) => "Lexer failed to parse character sequence as a floating point value (see cause)",
+        }
     }
 
     fn cause(&self) -> Option<&error::Error> {
@@ -204,8 +216,16 @@ impl<'a> Lexer<'a> {
         self.iter.clone().peekable().peek().map(|i| i.c)
     }
 
-    fn match_decimal(&mut self, init: &str) -> Result<'a> {
-        let mut s = String::from(init);
+    pub fn move_and_set_pos(&mut self) -> result::Result<(), Error<'a>>{
+        match self.iter.next() {
+            Some(c) => { self.token_pos = c.pos; Ok(())}
+            None => {emit_err!(self, LexerError::ExpectingMoreCharacters)}
+        }
+    }
+
+    fn match_decimal(&mut self, init: char) -> Result<'a> {
+        let mut s = String::new();
+        s.push(init);
         let is_num = |c:char| c.is_digit(10);
         eat_while!(self, is_num, |c:char| s.push(c));
         match self.peek_char() {
@@ -224,11 +244,12 @@ impl<'a> Lexer<'a> {
     }
 
     fn match_negative(&mut self) -> Result<'a> {
-        let t = self.match_decimal("")?;
+        let c = self.next_char().ok_or(Error{err: LexerError::ExpectingMoreCharacters, pos: self.token_pos})?;
+        let t = self.match_decimal(c)?;
         match t {
             Token::Float(f) => Ok(Token::Float(-f)),
             Token::Integer(i) => Ok(Token::Integer(-i)),
-            _ => ret_err!(self, LexerError::UnexpectedCharacter)
+            _ => panic!("`match_decimal() returned neither an Interger nor Float token (scanner position: {})!", self.token_pos)
         }
     }
 
@@ -282,8 +303,9 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn match_ident(&mut self) -> Result<'a> {
+    fn match_ident(&mut self, init: char) -> Result<'a> {
         let mut s = String::new();
+        s.push(init);
         let is_ident = |c:char| c.is_alphanumeric() || c == '_';
         eat_while!(self, is_ident, |c:char| s.push(c));
         return match s.to_lowercase().as_ref() {
@@ -302,15 +324,25 @@ impl<'a> Lexer<'a> {
         // then the number must be in hex, otherwise it is in decimal
         match self.peek_char() {
             Some('0') => {
-                self.next_char();
+                self.move_and_set_pos()?;
                 match self.peek_char() {
                     Some('x') => {self.next_char(); self.match_hex()},
-                    _ => self.match_decimal("0")
+                    _ => self.match_decimal('0')
                 }
             },
-            _ => self.match_decimal("")
+            Some(c) => { self.move_and_set_pos()?; self.match_decimal(c) },
+            None => panic!("Called `match_num()` but character stream ended; last scanner position is {}", self.token_pos)
         }
     }
+}
+
+macro_rules! lexer_try {
+    ($e:expr) => {
+        match $e {
+            Ok(r) => r,
+            Err(e) => return Some(Err(e))
+        }
+    };
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -323,40 +355,41 @@ impl<'a> Iterator for Lexer<'a> {
 
         loop {
             match self.peek_char() {
-                Some('(') => { self.next_char(); emit_token!(Token::LParen); }
-                Some(')') => { self.next_char(); emit_token!(Token::RParen); }
-                Some('.') => { self.next_char(); emit_token!(Token::Dot); }
+                Some('(') => { lexer_try!(self.move_and_set_pos()); emit_token!(Token::LParen); }
+                Some(')') => { lexer_try!(self.move_and_set_pos()); emit_token!(Token::RParen); }
+                Some('.') => { lexer_try!(self.move_and_set_pos()); emit_token!(Token::Dot); }
                 Some(';') => { eat_while!(self, |c| c != '\n', |_| ()); self.next_char(); continue; }
-                Some('-') => { self.next_char(); let r = self.match_negative(); return Some(r); }
-                Some(c) if c.is_whitespace() => { self.next_char(); continue; }
+                Some('-') => { lexer_try!(self.move_and_set_pos()); let r = self.match_negative(); return Some(r); }
+                Some(c) if c.is_whitespace() => { lexer_try!(self.move_and_set_pos()); continue; }
                 Some('\'') => {
                     // when the current character is a ' , return the next character (or two if \ )
                     // and check there is a closing '
-                    self.next_char();
+                    lexer_try!(self.move_and_set_pos());
                     let t = Some(self.match_char());
                     match self.next_char() {
                         Some('\'') => return t,
-                        Some(_) => return Some(emit_err!(self, LexerError::UnexpectedCharacter)),
+                        Some(c) => return Some(emit_err!(self, LexerError::UnexpectedCharacter(c))),
                         None => return Some(emit_err!(self, LexerError::ExpectingMoreCharacters))
                     };
                 }
                 Some('$') => {
                     // a $ indicates the start of a register name, so the next characters must either
                     // be numeric (for a GPR) or the name of a special register
-                    self.next_char();
+                    lexer_try!(self.move_and_set_pos());
                     return Some(self.match_reg());
                 }
                 Some(c) if c.is_alphabetic() || c == '_' => {
                     // when a character is alphabetic or an _ , it indicates the start of an identifer
                     // which can either be one of the "special" identifiers (keywords) or a generic
                     // name (e.g. a label reference)
-                    return Some(self.match_ident());
+                    lexer_try!(self.move_and_set_pos());
+                    return Some(self.match_ident(c));
                 }
                 Some(c) if c.is_digit(10) => {
                     // A numeric character indicates the start of a number
                     return Some(self.match_num());
                 }
-                Some(c) => return Some(emit_err!(self, LexerError::UnexpectedCharacter)),
+                Some(c) => return Some(emit_err!(self, LexerError::UnexpectedCharacter(c))),
                 None => { return None; }
             }
         }
@@ -598,8 +631,11 @@ mod test{
 
     #[test]
     fn lexer_test_32() {
-        let mut lexer = Lexer::new("-foo");
-        assert!(lexer.next().unwrap().is_err());
+        let mut lexer = Lexer::new("\n  -foo");
+        let e = lexer.next().unwrap();
+        assert!(e.clone().is_err());
+        assert_eq!(e.clone().unwrap_err().pos.line, 2);
+        assert_eq!(e.clone().unwrap_err().pos.column, 3);
     }
 
     #[test]
