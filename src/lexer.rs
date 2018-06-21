@@ -61,7 +61,7 @@ struct CharPosIter<'a> {
 
 impl<'a> CharPosIter<'a> {
     fn new<'b>(src: &'b str) -> CharPosIter<'b> {
-        CharPosIter{current: '\0', pos: Position{source: src, position: 1, line: 1, column: 1}, iter: src.chars()}
+        CharPosIter{current: '\0', pos: Position{source: src, position: 0, line: 1, column: 0}, iter: src.chars()}
     }
 }
 
@@ -405,134 +405,149 @@ impl<'a> Iterator for Lexer<'a> {
 #[cfg(test)]
 mod test{
     use super::*;
+    use self::Token::*;
+
+    macro_rules! assert_next_is {
+        ($lexer:expr, $token:expr, $pos:expr, $line:expr, $col:expr) => {
+            let t = $lexer.next();
+            assert!(t.is_some(), "t = {:?}", t);
+            let t = t.unwrap();
+            assert!(t.is_ok(), "t = {:?}", t);
+            let t = t.unwrap();
+            assert_eq!(t.token, $token, "Wrong token");
+            assert_eq!(t.pos.position, $pos, "Wrong file position");
+            assert_eq!(t.pos.line, $line, "Wrong line number");
+            assert_eq!(t.pos.column, $col, "Wrong column number");
+        };
+    }
 
     #[test]
     fn lexer_test_1() {
         let mut lexer = Lexer::new("1234");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Integer(1234));
+        assert_next_is!(lexer, Integer(1234), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_2() {
         let mut lexer = Lexer::new("I32");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Ident("I32".to_string()));
+        assert_next_is!(lexer, Ident("I32".to_string()), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_3() {
         let mut lexer = Lexer::new("2.71828");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Float(2.71828));
+        assert_next_is!(lexer, Float(2.71828), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_4() {
         let mut lexer = Lexer::new("0xabcd1234");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Address(0xabcd1234));
+        assert_next_is!(lexer, Address(0xabcd1234), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_5() {
         let mut lexer = Lexer::new("(");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::LParen);
+        assert_next_is!(lexer, LParen, 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_6() {
         let mut lexer = Lexer::new(")");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::RParen);
+        assert_next_is!(lexer, RParen, 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_7() {
         let mut lexer = Lexer::new(".");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Dot);
+        assert_next_is!(lexer, Dot, 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_8() {
         let mut lexer = Lexer::new("'e'");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Char('e'));
+        assert_next_is!(lexer, Char('e'), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_9() {
         let mut lexer = Lexer::new(r"'\n'");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Char('\n'));
+        assert_next_is!(lexer, Char('\n'), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_10() {
         let mut lexer = Lexer::new(r"'\f'");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Char('f'));
+        assert_next_is!(lexer, Char('f'), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_11() {
         let mut lexer = Lexer::new(r"'\\'");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Char('\\'));
+        assert_next_is!(lexer, Char('\\'), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_12() {
         let mut lexer = Lexer::new("foo:");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Label("foo".to_string()));
+        assert_next_is!(lexer, Label("foo".to_string()), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_13() {
         let mut lexer = Lexer::new("true");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Bool(true));
+        assert_next_is!(lexer, Bool(true), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_14() {
         let mut lexer = Lexer::new("false");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Bool(false));
+        assert_next_is!(lexer, Bool(false), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_15() {
         let mut lexer = Lexer::new(" F32 ( 3.14159 ) ");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Ident("F32".to_string()));
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::LParen);
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Float(3.14159));
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::RParen);
+        assert_next_is!(lexer, Ident("F32".to_string()), 2, 1, 2);
+        assert_next_is!(lexer, LParen, 6, 1, 6);
+        assert_next_is!(lexer, Float(3.14159), 8, 1, 8);
+        assert_next_is!(lexer, RParen, 16, 1, 16);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_16() {
         let mut lexer = Lexer::new("0xabcdefg");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Address(0xabcdef));
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Ident("g".to_string()));
+        assert_next_is!(lexer, Address(0xabcdef), 1, 1, 1);
+        assert_next_is!(lexer, Ident("g".to_string()), 9, 1, 9);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_17() {
         let mut lexer = Lexer::new("true:");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Bool(true));
+        assert_next_is!(lexer, Bool(true), 1, 1, 1);
         assert!(lexer.next().unwrap().is_err());
     }
 
     #[test]
     fn lexer_test_18() {
         let mut lexer = Lexer::new("foo0x123");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Ident("foo0x123".to_string()));
+        assert_next_is!(lexer, Ident("foo0x123".to_string()), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
@@ -545,83 +560,83 @@ mod test{
     #[test]
     fn lexer_test_20() {
         let mut lexer = Lexer::new(r"'\n' ; 0x123");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Char('\n'));
+        assert_next_is!(lexer, Char('\n'), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_21() {
         let mut lexer = Lexer::new("Void");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Void);
+        assert_next_is!(lexer, Void, 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_22() {
         let mut lexer = Lexer::new("I32(3)");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Ident("I32".to_string()));
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::LParen);
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Integer(3));
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::RParen);
+        assert_next_is!(lexer, Ident("I32".to_string()), 1, 1, 1);
+        assert_next_is!(lexer, LParen, 4, 1, 4);
+        assert_next_is!(lexer, Integer(3), 5, 1, 5);
+        assert_next_is!(lexer, RParen, 6, 1, 6);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_23() {
         let mut lexer = Lexer::new("$sp");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::SP);
+        assert_next_is!(lexer, SP, 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_24() {
         let mut lexer = Lexer::new("$fp");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::FP);
+        assert_next_is!(lexer, FP, 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_25() {
         let mut lexer = Lexer::new("$pc");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::PC);
+        assert_next_is!(lexer, PC, 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_26() {
         let mut lexer = Lexer::new("$0");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::R(0));
+        assert_next_is!(lexer, R(0), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_27() {
         let mut lexer = Lexer::new(" foo L1: bar");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Ident("foo".to_string()));
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Label("L1".to_string()));
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Ident("bar".to_string()));
+        assert_next_is!(lexer, Ident("foo".to_string()), 2, 1, 2);
+        assert_next_is!(lexer, Label("L1".to_string()), 6, 1, 6);
+        assert_next_is!(lexer, Ident("bar".to_string()), 10, 1, 10);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_28() {
         let mut lexer = Lexer::new("L1:L2:");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Label("L1".to_string()));
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Label("L2".to_string()));
+        assert_next_is!(lexer, Label("L1".to_string()), 1, 1, 1);
+        assert_next_is!(lexer, Label("L2".to_string()), 4, 1, 4);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_29() {
         let mut lexer = Lexer::new("-234");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Integer(-234));
+        assert_next_is!(lexer, Integer(-234), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
     #[test]
     fn lexer_test_30() {
         let mut lexer = Lexer::new("-5.43");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Float(-5.43));
+        assert_next_is!(lexer, Float(-5.43), 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
@@ -647,6 +662,6 @@ mod test{
     #[test]
     fn lexer_test_33() {
         let mut lexer = Lexer::new("0");
-        assert_eq!(lexer.next().unwrap().unwrap().token, Token::Integer(0));
+        assert_next_is!(lexer, Integer(0), 1, 1, 1);
     }
 }
