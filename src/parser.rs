@@ -88,22 +88,20 @@ macro_rules! unexpected_end   ( ()         => (Err(ParserError::ExpectingMoreTok
 
 macro_rules! eat_token_ {
     ($iter:expr, $expect:tt) => ({
-        let t = $iter.next().transpose()?;
-        match t {
-            Some(Token::$expect) => Ok(t.unwrap()),
-            Some(t) => unexpected_token!(t),
-            None => unexpected_end!()
+        let t = $iter.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+        match t.token {
+            Token::$expect => Ok(t.token),
+            _ => unexpected_token!(t),
         }
     })
 }
 
 macro_rules! eat_token {
     ($iter:expr, $expect:tt) => ({
-        let t = $iter.next().transpose()?;
-        match t {
-            Some(Token::$expect(v)) => Ok(v),
-            Some(t) => unexpected_token!(t),
-            None => unexpected_end!(),
+        let t = $iter.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+        match t.token {
+            Token::$expect(v) => Ok(v),
+            _ => unexpected_token!(t),
         }
     })
 }
@@ -118,9 +116,9 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
         })
     );
 
-    match lexer.next().clone().transpose()? {
-        Some(Token::Void) => Ok(Value::Void),
-        Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
+    match lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+        Token::Void => Ok(Value::Void),
+        Token::Ident(id) => match id.to_lowercase().as_ref() {
             "i32" => parse_as!(Integer, I32),
             "f32" => parse_as!(Float, F32),
             "char" => parse_as!(Char, Char),
@@ -129,26 +127,24 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
             "sptr" => parse_as!(Address, SPtr),
             id => return unexpected_id!(id)
         },
-        Some(t) => return unexpected_token!(t),
-        None => return unexpected_end!()
+        t => return unexpected_token!(t),
     }
 }
 
 fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<'a, RegisterName> {
-    match lexer.next().transpose()? {
-        Some(Token::SP) => Ok(RegisterName::StackPointer),
-        Some(Token::FP) => Ok(RegisterName::FramePointer),
-        Some(Token::PC) => Ok(RegisterName::ProgramCounter),
-        Some(Token::R(i)) => Ok(RegisterName::R(i)),
-        Some(t) => unexpected_token!(t),
-        None => unexpected_end!()
+    match lexer.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+        Token::SP => Ok(RegisterName::StackPointer),
+        Token::FP => Ok(RegisterName::FramePointer),
+        Token::PC => Ok(RegisterName::ProgramCounter),
+        Token::R(i) => Ok(RegisterName::R(i)),
+        t => unexpected_token!(t),
     }
 }
 
 fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
-    match lexer.next().transpose()? {
-        Some(Token::Void) => Ok(Type::Void),
-        Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
+    match lexer.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+        Token::Void => Ok(Type::Void),
+        Token::Ident(id) => match id.to_lowercase().as_ref() {
             "i32" => Ok(Type::I32),
             "f32" => Ok(Type::F32),
             "char" => Ok(Type::Char),
@@ -157,8 +153,7 @@ fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
             "sptr" => Ok(Type::SPtr),
             id => return unexpected_id!(id),
         }
-        Some(t) => return unexpected_token!(t),
-        None => return unexpected_end!(),
+        t => return unexpected_token!(t),
     }
 }
 
@@ -308,7 +303,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
     let mut labels: LabelTable = HashMap::new();
 
     loop {
-        match lexer.next().transpose()? {
+        match lexer.next().transpose()?.map(|t| t.token) {
             Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
                 "s" => {
                     eat_token_!(lexer, Dot)?;
