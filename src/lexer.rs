@@ -25,6 +25,7 @@ License:
 */
 
 use std::fmt;
+use std::cmp;
 use std::iter::Iterator;
 use std::str::Chars;
 use std::num;
@@ -34,15 +35,22 @@ use std::convert;
 
 #[derive(Debug,Clone,Copy,PartialEq)]
 pub struct Position<'a> {
-    source: &'a str,
-    position: usize,
-    line: usize,
-    column: usize
+    pub source: &'a str,
+    pub position: usize,
+    pub line: usize,
+    pub column: usize
 }
 
 impl<'a> fmt::Display for Position<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(line {}, columnt {})", self.line, self.column)
+    }
+}
+
+impl<'a> cmp::PartialOrd<Position<'a>> for Position<'a> {
+    fn partial_cmp(& self, &rhs: &Position) -> Option<cmp::Ordering> {
+        if self.source != rhs.source { None }
+        else { self.position.partial_cmp(&rhs.position) }
     }
 }
 
@@ -111,8 +119,8 @@ impl fmt::Display for Token {
 
 #[derive(Debug,Clone,PartialEq)]
 pub struct TokenPos<'a> {
-    token: Token,
-    pos: Position<'a>,
+    pub token: Token,
+    pub pos: Position<'a>,
 }
 
 #[derive(Debug,Clone,PartialEq)]
