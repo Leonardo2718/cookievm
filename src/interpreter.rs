@@ -44,6 +44,7 @@ pub enum InterpreterError {
     StackUnderflow,
     StackOverflow,
     UndefinedLabel(String),
+    OutOfRangeInstruction(usize),
     DebuggerError(String),
     ParseInputIntError(num::ParseIntError),
     ParseInputFloatError(num::ParseFloatError),
@@ -70,6 +71,7 @@ impl error::Error for InterpreterError {
             &StackUnderflow => "Attempted to pop value but stack is empty",
             &StackOverflow => "Attempted to push value but stack is full",
             &UndefinedLabel(_) => "Attempted to reference a label that does not exist",
+            &OutOfRangeInstruction(_) => "Attempted to execute instruction at address past the end of instruction sequence",
             &DebuggerError(_) => "Error occured in debugger",
             &ParseInputIntError(_) => "Error parsing input (expecting integral value)",
             &ParseInputFloatError(_) => "Error parsing input (expecting floating-point value)",
@@ -135,16 +137,25 @@ enum DebugState {
 }
 
 /*
-The `Thread` struct handles execution of Cookie code.
+Struct encapsulates the environment needed to
+execute cookie code
 */
-pub struct Thread<'a> {
-    instructions: &'a InstructionList,
+pub struct Interpreter {
+    instructions: InstructionList,
+    label_table: LabelTable,
     stack: Stack,
     fp: usize,
     pc: usize,
     gpr: [cookie::Value; 16],
-    label_table: LabelTable,
-    debug_state: DebugState,
+}
+
+/*
+Status of interpreter after executing an instruction
+*/
+#[derive(Debug,Clone,Copy,PartialEq)]
+pub enum Status {
+    Ok,     // default normal
+    Finish, // normal program termination
 }
 
 macro_rules! expect_value {
@@ -156,42 +167,32 @@ macro_rules! expect_value {
     )
 }
 
-impl<'a> Thread<'a> {
-    pub fn new(instructions: &'a InstructionList, labels: LabelTable) -> Thread<'a> {
-        use self::cookie::Value;
-        Thread  { instructions: instructions
-                , stack: Vec::new()
-                , fp: 0
-                , pc: 0
-                , gpr: [Value::Void; 16]
-                , label_table: labels
-                , debug_state: DebugState::Paused
-                }
+impl Interpreter {
+    pub fn new(instructions: InstructionList, label_table: LabelTable) -> Interpreter {
+        Interpreter { instructions
+                    , label_table
+                    , stack: Vec::with_capacity(100)
+                    , fp: 0
+                    , pc: 0
+                    , gpr: [cookie::Value::Void; 16]
+                    }
     }
 
-    pub fn exec(&mut self) -> Result<Option<cookie::Value>> {
-        while self.pc < self.instructions.len() {
-            let inst =  &self.instructions[self.pc];
-            self.exec_instruction(&inst)?;
-        }
-        return Ok(self.stack.pop());
+    pub fn exec_next(&mut self) -> Result<Status> {
+        let inst = self.get_next()?.clone();
+        self.exec_instruction(inst)
     }
 
-    fn exec_instruction(&mut self, inst: &cookie::Instruction) -> Result<()> {
+    fn get_next(&self) -> Result<&cookie::Instruction> {
+        self.instructions.get(self.pc).ok_or(InterpreterError::OutOfRangeInstruction(self.pc))
+    }
+
+    fn exec_instruction(&mut self, inst: cookie::Instruction) -> Result<Status> {
         use cookie_base::Instruction::*;
         self.pc = match inst {
-            PUSHR(reg) => {
-                self.do_pushr(reg)?;
-                self.pc + 1
-            },
-            PUSHC(v) => {
-                self.stack.push(v.clone());
-                self.pc + 1
-            },
-            POPR(reg) => {
-                self.do_popr(reg)?;
-                self.pc + 1
-            },
+            PUSHR(reg) => { self.do_pushr(reg)?; self.pc + 1 },
+            PUSHC(v) => { self.stack.push(v.clone()); self.pc + 1 },
+            POPR(reg) => { self.do_popr(reg)?; self.pc + 1 },
             POP => { self.pop()?; self.pc + 1 },
             LOADFROM(dest, src) => {
                 let src_val = self.get_value(src)?;
@@ -220,15 +221,15 @@ impl<'a> Thread<'a> {
                 self.put_value(dest, res)?;
                 self.pc + 1
             },
-            JUMP(label) => *self.get_label(label)?,
+            JUMP(label) => { *self.get_label(&label)? },
             DJUMP(src) => {
                 let src_val = self.get_value(src)?;
                 expect_value!(src_val, IPtr, InterpreterError::AttemptedJumpToNonIPtr(src_val))?
             },
             BRANCHON(imm, label, src) => {
-                let val = cookie::BinaryOp::EQ.apply_to(*imm, self.get_value(src)?)?;
+                let val = cookie::BinaryOp::EQ.apply_to(imm, self.get_value(src)?)?;
                 let condition = expect_value!(val, Bool, InterpreterError::TypeMismatchError(cookie::Type::Bool, val))?;
-                if condition { *self.get_label(label)? } else { self.pc + 1 }
+                if condition { *self.get_label(&label)? } else { self.pc + 1 }
             },
             PRINT(src) => {
                 use self::cookie::Value::*;
@@ -262,49 +263,49 @@ impl<'a> Thread<'a> {
                 // macro_rules! read
 
                 let val = match t {
-                    &Type::I32 => Value::I32(read_val!(i32)),
-                    &Type::F32 => Value::F32(read_val!(f32)),
-                    &Type::Bool => Value::Bool(read_val!(bool)),
-                    &Type::Char => {
+                    Type::I32 => Value::I32(read_val!(i32)),
+                    Type::F32 => Value::F32(read_val!(f32)),
+                    Type::Bool => Value::Bool(read_val!(bool)),
+                    Type::Char => {
                         let mut input = String::new();
                         io::stdin().read_line(&mut input)?;
                         Value::Char(input.chars().nth(0).unwrap())
                     }
-                    _ => return Err(InterpreterError::BadInputType(*t))
+                    _ => return Err(InterpreterError::BadInputType(t))
                 };
                 self.put_value(dest, val)?;
                 self.pc + 1
             },
-            EXIT => { self.instructions.len() } // setting pc to past the end will force termination
+            EXIT => { self.pc = self.instructions.len(); return Ok(Status::Finish); }
         };
-        return Ok(());
+        if self.pc < self.instructions.len() { Ok(Status::Ok) } else { Ok(Status::Finish) }
     }
 
-    fn do_pushr(&mut self, reg: &cookie::RegisterName) -> Result<()> {
-        let val = self.register_get(*reg)?;
+    fn do_pushr(&mut self, reg: cookie::RegisterName) -> Result<()> {
+        let val = self.register_get(reg)?;
         self.stack.push(val);
         Ok(())
     }
 
-    fn do_popr(&mut self, reg: &cookie::RegisterName) -> Result<()> {
+    fn do_popr(&mut self, reg: cookie::RegisterName) -> Result<()> {
         let val = self.pop()?;
-        self.register_put(*reg, val)?;
+        self.register_put(reg, val)?;
         Ok(())
     }
 
-    fn get_value(&mut self, loc: &cookie::Loc) -> Result<cookie::Value> {
+    fn get_value(&mut self, loc: cookie::Loc) -> Result<cookie::Value> {
         use self::cookie::Loc;
         match loc {
             Loc::Stack => self.pop(),
-            Loc::Reg(r) => self.register_get(*r),
+            Loc::Reg(r) => self.register_get(r),
         }
     }
 
-    fn put_value(&mut self, loc: &cookie::Loc, val: cookie::Value) -> Result<()> {
+    fn put_value(&mut self, loc: cookie::Loc, val: cookie::Value) -> Result<()> {
         use self::cookie::Loc;
         match loc {
             Loc::Stack => { self.stack.push(val); Ok(()) },
-            Loc::Reg(r) => self.register_put(*r, val),
+            Loc::Reg(r) => self.register_put(r, val),
         }
     }
 
@@ -348,6 +349,33 @@ impl<'a> Thread<'a> {
     fn get_label(&self, label: &str) -> Result<&usize> {
         self.label_table.get(label).ok_or(InterpreterError::UndefinedLabel(label.to_string()))
     }
+}
+
+/*
+The `Thread` struct handles execution of Cookie code.
+*/
+pub struct Thread {
+    interp: Interpreter,
+    status: Status,
+    debug_state: DebugState,
+}
+
+impl Thread {
+    pub fn new(instructions: InstructionList, labels: LabelTable) -> Thread {
+        use self::cookie::Value;
+        Thread  { interp: Interpreter::new(instructions, labels)
+                , status: Status::Ok
+                , debug_state: DebugState::Paused
+                }
+    }
+
+    pub fn exec(&mut self) -> Result<Option<cookie::Value>> {
+        loop {
+            self.status = self.interp.exec_next()?; 
+            if self.status == Status::Finish { break; }
+        }
+        return Ok(self.interp.stack.pop());
+    }
 
     // debugger ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -360,7 +388,7 @@ impl<'a> Thread<'a> {
 
         macro_rules! debug_quit {
             () => ({
-                if self.pc == 0 || self.pc >= self.instructions.len() { break; }
+                if self.status == Status::Finish { break; }
                 else {
                     let readline = prompt.readline("Program thread is still running, are you sure you want to quit (y/n): ");
                     match readline {
@@ -373,16 +401,16 @@ impl<'a> Thread<'a> {
 
         macro_rules! stack_point {
             ($pos:expr) => (
-                if $pos == self.stack.len() && $pos == self.fp { "<= $sp, $fp" }
-                else if $pos == self.fp { "<= $fp" }
-                else if $pos == self.stack.len() { "<= $sp" }
+                if $pos == self.interp.stack.len() && $pos == self.interp.fp { "<= $sp, $fp" }
+                else if $pos == self.interp.fp { "<= $fp" }
+                else if $pos == self.interp.stack.len() { "<= $sp" }
                 else { "" }
             )
         }
 
         macro_rules! print_stack {
             () => ({
-                for (pos, val) in self.stack.iter().enumerate().rev() {
+                for (pos, val) in self.interp.stack.iter().enumerate().rev() {
                     let pos = pos + 1;
                     let point = stack_point!(pos);
                     println!("0x{:08x} {:12}{}", pos, val.to_string(), point);
@@ -395,19 +423,18 @@ impl<'a> Thread<'a> {
         macro_rules! list_insts {
             ($addr:expr) => ({
                 let start = if $addr < 2 { $addr } else { $addr - 2 };
-                let end = cmp::min(self.instructions.len(), $addr + 3);
+                let end = cmp::min(self.interp.instructions.len(), $addr + 3);
                 for i in start..end {
-                    let pointer = if i == self.pc {"$pc => "} else { "       " };
-                    println!("{}0x{:08x} {:?}", pointer, i, self.instructions[i]);
+                    let pointer = if i == self.interp.pc {"$pc => "} else { "       " };
+                    println!("{}0x{:08x} {:?}", pointer, i, self.interp.instructions[i]);
                 }
             })
         }
 
         loop {
             if self.debug_state == DebugState::Running {
-                if self.pc >= self.instructions.len() { self.debug_state = DebugState::Paused; continue; }
-                let inst = &self.instructions[self.pc];
-                match self.exec_instruction(inst) {
+                if self.interp.pc >= self.interp.instructions.len() { self.debug_state = DebugState::Paused; continue; }
+                match self.interp.exec_next() {
                     Err(msg) => { println!("{}", msg); self.debug_state = DebugState::Paused; }
                     _ => continue,
                 };
@@ -415,10 +442,10 @@ impl<'a> Thread<'a> {
                 let readline = prompt.readline(">> ");
                 match readline {
                     Ok(cmd) => { prompt.add_history_entry(cmd.as_ref()); match cmd.as_ref() {
-                        "l" | "list" => list_insts!(self.pc),
+                        "l" | "list" => list_insts!(self.interp.pc),
                         "bt" | "stack" | "backtrace" => print_stack!(),
                         "c" | "continue" | "r" | "run" => self.debug_state = DebugState::Running,
-                        "s" | "step" => { let inst = &self.instructions[self.pc]; self.exec_instruction(&inst)?; }
+                        "s" | "step" => { self.interp.exec_next()?; }
                         "q" | "quit" => debug_quit!(),
                         _ => println!("Error: unknown command {:?}", cmd),
                     };},
@@ -445,7 +472,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(3)),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
     }
 
@@ -454,7 +481,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::F32(3.14159)),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::F32(3.14159));
     }
 
@@ -463,7 +490,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Bool(true)),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
     }
 
@@ -472,7 +499,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Char('w')),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Char('w'));
     }
 
@@ -481,7 +508,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::IPtr(0x5)),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0x5));
     }
 
@@ -490,7 +517,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::SPtr(0x5)),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(0x5));
     }
 
@@ -499,7 +526,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Void);
     }
 
@@ -509,7 +536,7 @@ mod test {
             PUSHC(Value::I32(2)),
             POP,
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().unwrap().is_none());
     }
 
@@ -519,7 +546,7 @@ mod test {
             PUSHC(Value::F32(2.71828)),
             POP,
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().unwrap().is_none());
     }
 
@@ -529,7 +556,7 @@ mod test {
             PUSHC(Value::Bool(true)),
             POP,
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().unwrap().is_none());
     }
 
@@ -539,7 +566,7 @@ mod test {
             PUSHC(Value::Void),
             POP,
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().unwrap().is_none());
     }
 
@@ -550,7 +577,7 @@ mod test {
             PUSHC(Value::I32(2)),
             BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
     }
 
@@ -561,7 +588,7 @@ mod test {
             PUSHC(Value::I32(4)),
             BOp(BinaryOp::SUB, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0x7a7));
     }
 
@@ -572,7 +599,7 @@ mod test {
             PUSHC(Value::I32(4)),
             BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -583,7 +610,7 @@ mod test {
             PUSHC(Value::I32(4)),
             BOp(BinaryOp::MUL, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -593,7 +620,7 @@ mod test {
             PUSHC(Value::I32(3)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-3));
     }
 
@@ -603,7 +630,7 @@ mod test {
             PUSHC(Value::F32(2.71828)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::F32(-2.71828));
     }
 
@@ -613,7 +640,7 @@ mod test {
             PUSHC(Value::Bool(false)),
             UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
     }
 
@@ -623,7 +650,7 @@ mod test {
             PUSHC(Value::I32(0)),
             UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
     }
 
@@ -633,7 +660,7 @@ mod test {
             PUSHC(Value::Void),
             UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -643,7 +670,7 @@ mod test {
             PUSHC(Value::F32(3.14)),
             UOp(UnaryOp::CVT(Type::I32), Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
     }
 
@@ -652,7 +679,7 @@ mod test {
         let insts = vec![
             PUSHR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(0));
     }
 
@@ -664,7 +691,7 @@ mod test {
             PUSHC(Value::Char('c')),
             PUSHR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(3));
     }
 
@@ -677,7 +704,7 @@ mod test {
             POP,
             PUSHR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(2));
     }
 
@@ -686,7 +713,7 @@ mod test {
         let insts = vec![
             PUSHR(RegisterName::ProgramCounter),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0));
     }
 
@@ -698,7 +725,7 @@ mod test {
             PUSHC(Value::Char('c')),
             PUSHR(RegisterName::ProgramCounter),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(3));
     }
 
@@ -711,7 +738,7 @@ mod test {
             POP,
             PUSHR(RegisterName::ProgramCounter),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(4));
     }
 
@@ -725,7 +752,7 @@ mod test {
             PUSHC(Value::SPtr(2)),
             POPR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(2));
     }
 
@@ -735,7 +762,7 @@ mod test {
             PUSHC(Value::I32(1)),
             POPR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -745,7 +772,7 @@ mod test {
             PUSHC(Value::IPtr(0x0)),
             POPR(RegisterName::StackPointer),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -755,7 +782,7 @@ mod test {
             PUSHC(Value::SPtr(0x2)),
             POPR(RegisterName::ProgramCounter),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -770,7 +797,7 @@ mod test {
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 4);
-        let mut thread = Thread::new(&insts, labels);
+        let mut thread = Thread::new(insts, labels);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
     }
 
@@ -779,7 +806,7 @@ mod test {
         let insts = vec![
             JUMP("label".to_string()),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -793,7 +820,7 @@ mod test {
             PUSHC(Value::Void),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
     }
 
@@ -803,7 +830,7 @@ mod test {
             PUSHC(Value::I32(0)),
             DJUMP(Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -819,7 +846,7 @@ mod test {
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
-        let mut thread = Thread::new(&insts, labels);
+        let mut thread = Thread::new(insts, labels);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
     }
 
@@ -835,7 +862,7 @@ mod test {
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
-        let mut thread = Thread::new(&insts, labels);
+        let mut thread = Thread::new(insts, labels);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(1));
     }
 
@@ -851,7 +878,7 @@ mod test {
         ];
         let mut labels: LabelTable = HashMap::new();
         labels.insert("label".to_string(), 5);
-        let mut thread = Thread::new(&insts, labels);
+        let mut thread = Thread::new(insts, labels);
         assert!(thread.exec().is_err());
     }
 
@@ -863,7 +890,7 @@ mod test {
             LOADFROM(Loc::Stack, Loc::Stack),
             BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(4));
     }
 
@@ -875,7 +902,7 @@ mod test {
             LOADFROM(Loc::Stack, Loc::Stack),
             BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 
@@ -889,7 +916,7 @@ mod test {
             STORETO(Loc::Stack, Loc::Stack),
             BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(1));
     }
 
@@ -900,7 +927,7 @@ mod test {
             PUSHC(Value::I32(1)),
             STORETO(Loc::Stack, Loc::Stack),
         ];
-        let mut thread = Thread::new(&insts, HashMap::new());
+        let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
     }
 }

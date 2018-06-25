@@ -69,7 +69,7 @@ fn main() {
 
     let (instructions, labels) = parse(Lexer::new(source.as_ref())).unwrap();
 
-    let mut thread = Thread::new(&instructions, labels);
+    let mut thread = Thread::new(instructions, labels);
     if options.debug { match thread.debug() {
         Ok(()) => {},
         Err(msg) => println!("{}", msg),

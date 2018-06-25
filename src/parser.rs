@@ -299,7 +299,7 @@ fn parse_vinst<'a>(lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> {
     use cookie_base::Instruction::*;
 
-    let mut insts: InstructionList = Vec::new();
+    let mut insts: Vec<Instruction> = Vec::new();
     let mut labels: LabelTable = HashMap::new();
 
     loop {
