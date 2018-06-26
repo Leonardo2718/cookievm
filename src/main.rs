@@ -32,6 +32,7 @@ use std::io::BufReader;
 
 mod cookie_base;
 mod interpreter;
+mod thread;
 mod lexer;
 mod parser;
 
@@ -44,7 +45,7 @@ struct Options {
 }
 
 fn main() {
-    use interpreter::*;
+    use thread::Thread;
     use lexer::*;
     use parser::*;
 
