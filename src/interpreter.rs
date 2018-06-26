@@ -156,7 +156,7 @@ macro_rules! expect_value {
     ($expr:expr, $ctor:ident, $err:expr) => (
         match $expr {
             cookie::Value::$ctor(v) => Ok(v),
-            v => Err($err)
+            _v => Err($err)
         }
     )
 }

@@ -125,9 +125,9 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
             "bool" => parse_as!(Bool, Bool),
             "iptr" => parse_as!(Address, IPtr),
             "sptr" => parse_as!(Address, SPtr),
-            id => return unexpected_id!(id)
+            _id => return unexpected_id!(_id)
         },
-        t => return unexpected_token!(t),
+        _t => return unexpected_token!(_t),
     }
 }
 
@@ -137,7 +137,7 @@ fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<'a, RegisterName> {
         Token::FP => Ok(RegisterName::FramePointer),
         Token::PC => Ok(RegisterName::ProgramCounter),
         Token::R(i) => Ok(RegisterName::R(i)),
-        t => unexpected_token!(t),
+        _t => unexpected_token!(_t),
     }
 }
 
@@ -151,9 +151,9 @@ fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
             "bool" => Ok(Type::Bool),
             "iptr" => Ok(Type::IPtr),
             "sptr" => Ok(Type::SPtr),
-            id => return unexpected_id!(id),
+            _id => return unexpected_id!(_id),
         }
-        t => return unexpected_token!(t),
+        _t => return unexpected_token!(_t),
     }
 }
 
@@ -328,7 +328,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
                 id => return unexpected_id!(id)
             },
             Some(Token::Label(l)) => { labels.insert(l.to_string(), insts.len()); },
-            Some(t) => return unexpected_token!(t),
+            Some(_t) => return unexpected_token!(_t),
             None => break,
         };
     }

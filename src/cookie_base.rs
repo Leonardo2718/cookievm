@@ -36,6 +36,7 @@ macro_rules! define_types {
         #[derive(Debug,Clone,Copy,PartialEq)]
         pub enum Type { $($n),+ , Void }
 
+        #[allow(non_snake_case)]
         pub mod RustType {
             $( pub type $n = $t );+;
             pub type Void = ();
