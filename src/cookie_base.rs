@@ -331,6 +331,13 @@ pub enum Loc {
 }
 
 #[derive(Debug,Clone,PartialEq)]
+pub enum Target {
+    UnresolvedLabel(String),
+    InternalLabel(usize, String),
+    ExternalLabel(usize, String)
+}
+
+#[derive(Debug,Clone,PartialEq)]
 pub enum Instruction {
     PUSHR(RegisterName),
     PUSHC(Value),
@@ -343,9 +350,9 @@ pub enum Instruction {
     UOp(UnaryOp, Loc, Loc),
     BOp(BinaryOp, Loc, Loc, Loc),
 
-    JUMP(String),
+    JUMP(Target),
     DJUMP(Loc),
-    BRANCHON(Value, String, Loc),
+    BRANCHON(Value, Target, Loc),
 
     PRINT(Loc),
     READ(Type, Loc),

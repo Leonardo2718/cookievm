@@ -147,6 +147,7 @@ mod test {
     use super::*;
     use super::cookie::*;
     use super::cookie::Instruction::*;
+    use super::cookie::Target::*;
 
     #[test]
     fn pushc_test_1() {
@@ -471,7 +472,7 @@ mod test {
     fn jump_test_1() {
         let insts = vec![
             PUSHC(Value::I32(1)),
-            JUMP("label".to_string()),
+            JUMP(InternalLabel(4, "label".to_string())),
             POP,
             PUSHC(Value::I32(2)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -485,7 +486,7 @@ mod test {
     #[test]
     fn jump_test_2() {
         let insts = vec![
-            JUMP("label".to_string()),
+            JUMP(UnresolvedLabel("label".to_string())),
         ];
         let mut thread = Thread::new(insts, HashMap::new());
         assert!(thread.exec().is_err());
@@ -520,7 +521,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(true), "label".to_string(), Loc::Stack),
+            BRANCHON(Value::Bool(true), InternalLabel(5, "label".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::Void),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -536,7 +537,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(false), "label".to_string(), Loc::Stack),
+            BRANCHON(Value::Bool(false), InternalLabel(5, "label".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::I32(-1)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -552,7 +553,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::I32(1), "label".to_string(), Loc::Stack),
+            BRANCHON(Value::I32(1), InternalLabel(5, "label".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::I32(-1)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),

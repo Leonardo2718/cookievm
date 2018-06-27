@@ -215,7 +215,7 @@ impl Interpreter {
                 self.put_value(dest, res)?;
                 self.pc + 1
             },
-            JUMP(label) => { *self.get_label(&label)? },
+            JUMP(label) => { self.get_target_addr(&label)? },
             DJUMP(src) => {
                 let src_val = self.get_value(src)?;
                 expect_value!(src_val, IPtr, InterpreterError::AttemptedJumpToNonIPtr(src_val))?
@@ -223,7 +223,7 @@ impl Interpreter {
             BRANCHON(imm, label, src) => {
                 let val = cookie::BinaryOp::EQ.apply_to(imm, self.get_value(src)?)?;
                 let condition = expect_value!(val, Bool, InterpreterError::TypeMismatchError(cookie::Type::Bool, val))?;
-                if condition { *self.get_label(&label)? } else { self.pc + 1 }
+                if condition { self.get_target_addr(&label)? } else { self.pc + 1 }
             },
             PRINT(src) => {
                 use self::cookie::Value::*;
@@ -342,5 +342,14 @@ impl Interpreter {
 
     fn get_label(&self, label: &str) -> Result<&usize> {
         self.label_table.get(label).ok_or(InterpreterError::UndefinedLabel(label.to_string()))
+    }
+
+    fn get_target_addr(&self, t: &cookie::Target) -> Result<usize> {
+        use cookie_base::Target::*;
+        match t {
+            &InternalLabel(addr, _) => Ok(addr),
+            &ExternalLabel(_, ref l) => Err(InterpreterError::UndefinedLabel(l.to_string())),
+            &UnresolvedLabel(ref l) => Err(InterpreterError::UndefinedLabel(l.to_string()))
+        }
     }
 }

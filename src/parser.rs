@@ -187,6 +187,7 @@ match is found, None is returned and no tokens are consumed.
 */
 fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'a, Option<Instruction>> {
     use cookie_base::Instruction::*;
+    use cookie_base::Target::*;
     let inst = match ident.to_lowercase().as_ref() {
         "djump" => {
             let loc = parse_loc(lexer)?;
@@ -196,7 +197,7 @@ fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc: &LocPar
             let v = parse_value(lexer)?;
             let loc = parse_loc(lexer)?;
             let l = eat_token!(lexer, Ident)?;
-            Some(BRANCHON(v, l, loc))
+            Some(BRANCHON(v, UnresolvedLabel(l), loc))
         },
         "print" => {
             let loc = parse_loc(lexer)?;
@@ -296,9 +297,25 @@ fn parse_vinst<'a>(lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'
         .unwrap_or(unexpected_id!(id))
 }
 
+fn resolve_label(inst: &Instruction, labels: &LabelTable) -> Instruction {
+    use cookie_base::Instruction::*;
+    use cookie_base::Target::*;
+    match inst {
+        JUMP(UnresolvedLabel(l)) => { 
+            if let Some(n) = labels.get(&l.to_string()) { JUMP(InternalLabel(*n, l.to_string())) } 
+            else { inst.clone() }
+        }
+        BRANCHON(v, UnresolvedLabel(l), c) => {
+            if let Some(n) = labels.get(&l.to_string()) { BRANCHON(*v, InternalLabel(*n, l.to_string()), *c) } 
+            else { inst.clone() }
+        }
+        _ => inst.clone()
+    }
+}
+
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> {
     use cookie_base::Instruction::*;
-
+    use cookie_base::Target::*;
     let mut insts: Vec<Instruction> = Vec::new();
     let mut labels: LabelTable = HashMap::new();
 
@@ -323,7 +340,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
                     insts.push(POPR(reg));
                 },
                 "pop" => { insts.push(POP); },
-                "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(l)); },
+                "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(UnresolvedLabel(l))); },
                 "exit" => { insts.push(EXIT); }
                 id => return unexpected_id!(id)
             },
@@ -333,6 +350,8 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
         };
     }
 
+    let insts = insts.iter_mut().map(|i| resolve_label(i, &labels)).collect::<InstructionList>();
+
     return Ok((insts, labels));
 }
 
@@ -340,6 +359,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
 mod test {
     use super::*;
     use cookie_base::Instruction::*;
+    use cookie_base::Target::*;
 
     #[test]
     fn parse_vinst_test_1() {
@@ -521,7 +541,7 @@ mod test {
         assert!(labels.contains_key("L1"));
         assert_eq!(*labels.get("L1").unwrap(), 1 as usize);
         let mut iter = insts.iter();
-        assert_eq!(*iter.next().unwrap(), JUMP("L1".to_string()));
+        assert_eq!(*iter.next().unwrap(), JUMP(InternalLabel(1, "L1".to_string())));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::Bool(true)));
         assert!(iter.next().is_none());
     }
