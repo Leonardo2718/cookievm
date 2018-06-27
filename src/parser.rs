@@ -520,7 +520,7 @@ mod test {
     fn parsre_test_3() {
         let insts = parse(Lexer::new("jump L1 L1: pushc Bool(true)")).unwrap();
         let mut iter = insts.iter();
-        assert_eq!(*iter.next().unwrap(), JUMP(InternalSymbol(1, "L1".to_string())));
+        assert_eq!(*iter.next().unwrap(), JUMP(LocalSymbol(1, "L1".to_string())));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::Bool(true)));
         assert!(iter.next().is_none());
     }

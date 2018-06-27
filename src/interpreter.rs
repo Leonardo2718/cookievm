@@ -338,7 +338,7 @@ impl Interpreter {
     fn get_target_addr(&self, t: &cookie::Target) -> Result<usize> {
         use cookie_base::Target::*;
         match t {
-            &InternalSymbol(addr, _) => Ok(addr),
+            &LocalSymbol(addr, _) => Ok(addr),
             &ExternalSymbol(_, ref l) => Err(InterpreterError::UndefinedSymbol(l.to_string())),
             &UnresolvedSymbol(ref l) => Err(InterpreterError::UndefinedSymbol(l.to_string()))
         }

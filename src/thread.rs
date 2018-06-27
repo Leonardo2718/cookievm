@@ -472,7 +472,7 @@ mod test {
     fn jump_test_1() {
         let insts = vec![
             PUSHC(Value::I32(1)),
-            JUMP(InternalSymbol(4, "symbol".to_string())),
+            JUMP(LocalSymbol(4, "symbol".to_string())),
             POP,
             PUSHC(Value::I32(2)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -521,7 +521,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(true), InternalSymbol(5, "symbol".to_string()), Loc::Stack),
+            BRANCHON(Value::Bool(true), LocalSymbol(5, "symbol".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::Void),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -537,7 +537,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(false), InternalSymbol(5, "symbol".to_string()), Loc::Stack),
+            BRANCHON(Value::Bool(false), LocalSymbol(5, "symbol".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::I32(-1)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
@@ -553,7 +553,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::I32(1), InternalSymbol(5, "symbol".to_string()), Loc::Stack),
+            BRANCHON(Value::I32(1), LocalSymbol(5, "symbol".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::I32(-1)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),

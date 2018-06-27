@@ -334,7 +334,7 @@ pub enum Loc {
 #[derive(Debug,Clone,PartialEq)]
 pub enum Target {
     UnresolvedSymbol(String),
-    InternalSymbol(usize, String),
+    LocalSymbol(usize, String),
     ExternalSymbol(usize, String)
 }
 
@@ -371,11 +371,11 @@ fn resolve_symbol(inst: &Instruction, symbols: &SymbolTable) -> Instruction {
     use cookie_base::Target::*;
     match inst {
         JUMP(UnresolvedSymbol(l)) => { 
-            if let Some(n) = symbols.get(&l.to_string()) { JUMP(InternalSymbol(*n, l.to_string())) } 
+            if let Some(n) = symbols.get(&l.to_string()) { JUMP(LocalSymbol(*n, l.to_string())) } 
             else { inst.clone() }
         }
         BRANCHON(v, UnresolvedSymbol(l), c) => {
-            if let Some(n) = symbols.get(&l.to_string()) { BRANCHON(*v, InternalSymbol(*n, l.to_string()), *c) } 
+            if let Some(n) = symbols.get(&l.to_string()) { BRANCHON(*v, LocalSymbol(*n, l.to_string()), *c) } 
             else { inst.clone() }
         }
         _ => inst.clone()
