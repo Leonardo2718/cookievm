@@ -297,7 +297,7 @@ fn parse_vinst<'a>(lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'
         .unwrap_or(unexpected_id!(id))
 }
 
-pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> {
+pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
     use cookie_base::Instruction::*;
     use cookie_base::Target::*;
     let mut insts: Vec<Instruction> = Vec::new();
@@ -336,7 +336,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
 
     let insts = resolve_internal_lables(insts, &labels);
 
-    return Ok((insts, labels));
+    return Ok(insts);
 }
 
 #[cfg(test)]
@@ -500,8 +500,7 @@ mod test {
 
     #[test]
     fn parser_test_1() {
-        let (insts, labels) = parse(Lexer::new("pushc I32(3)")).unwrap();
-        assert!(labels.is_empty());
+        let insts = parse(Lexer::new("pushc I32(3)")).unwrap();
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::I32(3)));
         assert!(iter.next().is_none());
@@ -509,8 +508,7 @@ mod test {
 
     #[test]
     fn parser_test_2() {
-        let (insts, labels) = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) s.add")).unwrap();
-        assert!(labels.is_empty());
+        let insts = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) s.add")).unwrap();
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(3.1)));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(4.2)));
@@ -520,10 +518,7 @@ mod test {
 
     #[test]
     fn parsre_test_3() {
-        let (insts, labels) = parse(Lexer::new("jump L1 L1: pushc Bool(true)")).unwrap();
-        assert_eq!(labels.len(), 1);
-        assert!(labels.contains_key("L1"));
-        assert_eq!(*labels.get("L1").unwrap(), 1 as usize);
+        let insts = parse(Lexer::new("jump L1 L1: pushc Bool(true)")).unwrap();
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), JUMP(InternalLabel(1, "L1".to_string())));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::Bool(true)));

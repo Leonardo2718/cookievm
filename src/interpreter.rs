@@ -133,7 +133,6 @@ execute cookie code
 */
 pub struct Interpreter {
     pub instructions: cookie::InstructionList,
-    pub label_table: cookie::LabelTable,
     pub stack: Stack,
     pub fp: usize,
     pub pc: usize,
@@ -159,9 +158,8 @@ macro_rules! expect_value {
 }
 
 impl Interpreter {
-    pub fn new(instructions: cookie::InstructionList, label_table: cookie::LabelTable) -> Interpreter {
+    pub fn new(instructions: cookie::InstructionList) -> Interpreter {
         Interpreter { instructions
-                    , label_table
                     , stack: Vec::with_capacity(100)
                     , fp: 0
                     , pc: 0
@@ -335,10 +333,6 @@ impl Interpreter {
 
     fn pop(&mut self) -> Result<cookie::Value> {
         self.stack.pop().ok_or(InterpreterError::StackUnderflow)
-    }
-
-    fn get_label(&self, label: &str) -> Result<&usize> {
-        self.label_table.get(label).ok_or(InterpreterError::UndefinedLabel(label.to_string()))
     }
 
     fn get_target_addr(&self, t: &cookie::Target) -> Result<usize> {
