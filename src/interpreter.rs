@@ -42,7 +42,7 @@ pub enum InterpreterError {
     BadInputType(cookie::Type),
     StackUnderflow,
     StackOverflow,
-    UndefinedLabel(String),
+    UndefinedSymbol(String),
     OutOfRangeInstruction(usize),
     DebuggerError(String),
     ParseInputIntError(num::ParseIntError),
@@ -69,7 +69,7 @@ impl error::Error for InterpreterError {
             &BadInputType(_) => "Cannot read input of given type",
             &StackUnderflow => "Attempted to pop value but stack is empty",
             &StackOverflow => "Attempted to push value but stack is full",
-            &UndefinedLabel(_) => "Attempted to reference a label that does not exist",
+            &UndefinedSymbol(_) => "Attempted to reference a symbol that does not exist",
             &OutOfRangeInstruction(_) => "Attempted to execute instruction at address past the end of instruction sequence",
             &DebuggerError(_) => "Error occured in debugger",
             &ParseInputIntError(_) => "Error parsing input (expecting integral value)",
@@ -210,15 +210,15 @@ impl Interpreter {
                 self.put_value(dest, res)?;
                 self.pc + 1
             },
-            JUMP(label) => { self.get_target_addr(&label)? },
+            JUMP(symbol) => { self.get_target_addr(&symbol)? },
             DJUMP(src) => {
                 let src_val = self.get_value(src)?;
                 expect_value!(src_val, IPtr, InterpreterError::AttemptedJumpToNonIPtr(src_val))?
             },
-            BRANCHON(imm, label, src) => {
+            BRANCHON(imm, symbol, src) => {
                 let val = cookie::BinaryOp::EQ.apply_to(imm, self.get_value(src)?)?;
                 let condition = expect_value!(val, Bool, InterpreterError::TypeMismatchError(cookie::Type::Bool, val))?;
-                if condition { self.get_target_addr(&label)? } else { self.pc + 1 }
+                if condition { self.get_target_addr(&symbol)? } else { self.pc + 1 }
             },
             PRINT(src) => {
                 use self::cookie::Value::*;
@@ -338,9 +338,9 @@ impl Interpreter {
     fn get_target_addr(&self, t: &cookie::Target) -> Result<usize> {
         use cookie_base::Target::*;
         match t {
-            &InternalLabel(addr, _) => Ok(addr),
-            &ExternalLabel(_, ref l) => Err(InterpreterError::UndefinedLabel(l.to_string())),
-            &UnresolvedLabel(ref l) => Err(InterpreterError::UndefinedLabel(l.to_string()))
+            &InternalSymbol(addr, _) => Ok(addr),
+            &ExternalSymbol(_, ref l) => Err(InterpreterError::UndefinedSymbol(l.to_string())),
+            &UnresolvedSymbol(ref l) => Err(InterpreterError::UndefinedSymbol(l.to_string()))
         }
     }
 }

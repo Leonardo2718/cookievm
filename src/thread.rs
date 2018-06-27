@@ -472,13 +472,13 @@ mod test {
     fn jump_test_1() {
         let insts = vec![
             PUSHC(Value::I32(1)),
-            JUMP(InternalLabel(4, "label".to_string())),
+            JUMP(InternalSymbol(4, "symbol".to_string())),
             POP,
             PUSHC(Value::I32(2)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
-        let mut labels: LabelTable = HashMap::new();
-        labels.insert("label".to_string(), 4);
+        let mut symbols: SymbolTable = HashMap::new();
+        symbols.insert("symbol".to_string(), 4);
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
     }
@@ -486,7 +486,7 @@ mod test {
     #[test]
     fn jump_test_2() {
         let insts = vec![
-            JUMP(UnresolvedLabel("label".to_string())),
+            JUMP(UnresolvedSymbol("symbol".to_string())),
         ];
         let mut thread = Thread::new(insts);
         assert!(thread.exec().is_err());
@@ -521,13 +521,13 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(true), InternalLabel(5, "label".to_string()), Loc::Stack),
+            BRANCHON(Value::Bool(true), InternalSymbol(5, "symbol".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::Void),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
-        let mut labels: LabelTable = HashMap::new();
-        labels.insert("label".to_string(), 5);
+        let mut symbols: SymbolTable = HashMap::new();
+        symbols.insert("symbol".to_string(), 5);
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
     }
@@ -537,13 +537,13 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(false), InternalLabel(5, "label".to_string()), Loc::Stack),
+            BRANCHON(Value::Bool(false), InternalSymbol(5, "symbol".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::I32(-1)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
-        let mut labels: LabelTable = HashMap::new();
-        labels.insert("label".to_string(), 5);
+        let mut symbols: SymbolTable = HashMap::new();
+        symbols.insert("symbol".to_string(), 5);
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(1));
     }
@@ -553,13 +553,13 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::I32(1), InternalLabel(5, "label".to_string()), Loc::Stack),
+            BRANCHON(Value::I32(1), InternalSymbol(5, "symbol".to_string()), Loc::Stack),
             POP,
             PUSHC(Value::I32(-1)),
             UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
         ];
-        let mut labels: LabelTable = HashMap::new();
-        labels.insert("label".to_string(), 5);
+        let mut symbols: SymbolTable = HashMap::new();
+        symbols.insert("symbol".to_string(), 5);
         let mut thread = Thread::new(insts);
         assert!(thread.exec().is_err());
     }

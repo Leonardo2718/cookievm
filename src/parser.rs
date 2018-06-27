@@ -197,7 +197,7 @@ fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc: &LocPar
             let v = parse_value(lexer)?;
             let loc = parse_loc(lexer)?;
             let l = eat_token!(lexer, Ident)?;
-            Some(BRANCHON(v, UnresolvedLabel(l), loc))
+            Some(BRANCHON(v, UnresolvedSymbol(l), loc))
         },
         "print" => {
             let loc = parse_loc(lexer)?;
@@ -301,7 +301,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
     use cookie_base::Instruction::*;
     use cookie_base::Target::*;
     let mut insts: Vec<Instruction> = Vec::new();
-    let mut labels: LabelTable = HashMap::new();
+    let mut symbols: SymbolTable = HashMap::new();
 
     loop {
         match lexer.next().transpose()?.map(|t| t.token) {
@@ -324,17 +324,17 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                     insts.push(POPR(reg));
                 },
                 "pop" => { insts.push(POP); },
-                "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(UnresolvedLabel(l))); },
+                "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(UnresolvedSymbol(l))); },
                 "exit" => { insts.push(EXIT); }
                 id => return unexpected_id!(id)
             },
-            Some(Token::Label(l)) => { labels.insert(l.to_string(), insts.len()); },
+            Some(Token::Label(l)) => { symbols.insert(l.to_string(), insts.len()); },
             Some(_t) => return unexpected_token!(_t),
             None => break,
         };
     }
 
-    let insts = resolve_internal_lables(insts, &labels);
+    let insts = resolve_internal_lables(insts, &symbols);
 
     return Ok(insts);
 }
@@ -520,7 +520,7 @@ mod test {
     fn parsre_test_3() {
         let insts = parse(Lexer::new("jump L1 L1: pushc Bool(true)")).unwrap();
         let mut iter = insts.iter();
-        assert_eq!(*iter.next().unwrap(), JUMP(InternalLabel(1, "L1".to_string())));
+        assert_eq!(*iter.next().unwrap(), JUMP(InternalSymbol(1, "L1".to_string())));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::Bool(true)));
         assert!(iter.next().is_none());
     }

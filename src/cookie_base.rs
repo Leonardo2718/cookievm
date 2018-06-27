@@ -333,9 +333,9 @@ pub enum Loc {
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum Target {
-    UnresolvedLabel(String),
-    InternalLabel(usize, String),
-    ExternalLabel(usize, String)
+    UnresolvedSymbol(String),
+    InternalSymbol(usize, String),
+    ExternalSymbol(usize, String)
 }
 
 #[derive(Debug,Clone,PartialEq)]
@@ -364,26 +364,26 @@ pub enum Instruction {
 // cookie code ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 pub type InstructionList = Vec<Instruction>;
-pub type LabelTable = HashMap<String, usize>;
+pub type SymbolTable = HashMap<String, usize>;
 
-fn resolve_label(inst: &Instruction, labels: &LabelTable) -> Instruction {
+fn resolve_symbol(inst: &Instruction, symbols: &SymbolTable) -> Instruction {
     use cookie_base::Instruction::*;
     use cookie_base::Target::*;
     match inst {
-        JUMP(UnresolvedLabel(l)) => { 
-            if let Some(n) = labels.get(&l.to_string()) { JUMP(InternalLabel(*n, l.to_string())) } 
+        JUMP(UnresolvedSymbol(l)) => { 
+            if let Some(n) = symbols.get(&l.to_string()) { JUMP(InternalSymbol(*n, l.to_string())) } 
             else { inst.clone() }
         }
-        BRANCHON(v, UnresolvedLabel(l), c) => {
-            if let Some(n) = labels.get(&l.to_string()) { BRANCHON(*v, InternalLabel(*n, l.to_string()), *c) } 
+        BRANCHON(v, UnresolvedSymbol(l), c) => {
+            if let Some(n) = symbols.get(&l.to_string()) { BRANCHON(*v, InternalSymbol(*n, l.to_string()), *c) } 
             else { inst.clone() }
         }
         _ => inst.clone()
     }
 }
 
-pub fn resolve_internal_lables(insts: InstructionList, labels: &LabelTable) -> InstructionList {
-    insts.iter().map(|i| resolve_label(i, labels)).collect::<InstructionList>()
+pub fn resolve_internal_lables(insts: InstructionList, symbols: &SymbolTable) -> InstructionList {
+    insts.iter().map(|i| resolve_symbol(i, symbols)).collect::<InstructionList>()
 }
 
 // tests ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
