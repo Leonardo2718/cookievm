@@ -297,22 +297,6 @@ fn parse_vinst<'a>(lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'
         .unwrap_or(unexpected_id!(id))
 }
 
-fn resolve_label(inst: &Instruction, labels: &LabelTable) -> Instruction {
-    use cookie_base::Instruction::*;
-    use cookie_base::Target::*;
-    match inst {
-        JUMP(UnresolvedLabel(l)) => { 
-            if let Some(n) = labels.get(&l.to_string()) { JUMP(InternalLabel(*n, l.to_string())) } 
-            else { inst.clone() }
-        }
-        BRANCHON(v, UnresolvedLabel(l), c) => {
-            if let Some(n) = labels.get(&l.to_string()) { BRANCHON(*v, InternalLabel(*n, l.to_string()), *c) } 
-            else { inst.clone() }
-        }
-        _ => inst.clone()
-    }
-}
-
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> {
     use cookie_base::Instruction::*;
     use cookie_base::Target::*;
@@ -350,7 +334,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<(InstructionList, LabelTable)> 
         };
     }
 
-    let insts = insts.iter_mut().map(|i| resolve_label(i, &labels)).collect::<InstructionList>();
+    let insts = resolve_internal_lables(insts, &labels);
 
     return Ok((insts, labels));
 }

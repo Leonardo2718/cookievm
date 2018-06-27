@@ -44,7 +44,7 @@ pub struct Thread {
 }
 
 impl Thread {
-    pub fn new(instructions: InstructionList, labels: LabelTable) -> Thread {
+    pub fn new(instructions: cookie::InstructionList, labels: cookie::LabelTable) -> Thread {
         Thread  { interp: Interpreter::new(instructions, labels)
                 , status: Status::Ok
                 , debug_state: DebugState::Paused

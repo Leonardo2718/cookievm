@@ -28,6 +28,7 @@ use std::fmt;
 use std::result;
 use std::error;
 use std::convert;
+use std::collections::HashMap;
 
 // cookie data types and value ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -358,6 +359,31 @@ pub enum Instruction {
     READ(Type, Loc),
 
     EXIT,
+}
+
+// cookie code ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+pub type InstructionList = Vec<Instruction>;
+pub type LabelTable = HashMap<String, usize>;
+
+fn resolve_label(inst: &Instruction, labels: &LabelTable) -> Instruction {
+    use cookie_base::Instruction::*;
+    use cookie_base::Target::*;
+    match inst {
+        JUMP(UnresolvedLabel(l)) => { 
+            if let Some(n) = labels.get(&l.to_string()) { JUMP(InternalLabel(*n, l.to_string())) } 
+            else { inst.clone() }
+        }
+        BRANCHON(v, UnresolvedLabel(l), c) => {
+            if let Some(n) = labels.get(&l.to_string()) { BRANCHON(*v, InternalLabel(*n, l.to_string()), *c) } 
+            else { inst.clone() }
+        }
+        _ => inst.clone()
+    }
+}
+
+pub fn resolve_internal_lables(insts: InstructionList, labels: &LabelTable) -> InstructionList {
+    insts.iter().map(|i| resolve_label(i, labels)).collect::<InstructionList>()
 }
 
 // tests ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -25,7 +25,6 @@ License:
 */
 
 use cookie_base as cookie;
-use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::fmt;
@@ -126,17 +125,15 @@ impl convert::From<str::ParseBoolError> for InterpreterError {
 
 pub type Result<T> = result::Result<T, InterpreterError>;
 
-pub type InstructionList = Vec<cookie::Instruction>;
 pub type Stack = Vec<cookie::Value>;
-pub type LabelTable = HashMap<String, usize>;
 
 /*
 Struct encapsulates the environment needed to
 execute cookie code
 */
 pub struct Interpreter {
-    pub instructions: InstructionList,
-    pub label_table: LabelTable,
+    pub instructions: cookie::InstructionList,
+    pub label_table: cookie::LabelTable,
     pub stack: Stack,
     pub fp: usize,
     pub pc: usize,
@@ -162,7 +159,7 @@ macro_rules! expect_value {
 }
 
 impl Interpreter {
-    pub fn new(instructions: InstructionList, label_table: LabelTable) -> Interpreter {
+    pub fn new(instructions: cookie::InstructionList, label_table: cookie::LabelTable) -> Interpreter {
         Interpreter { instructions
                     , label_table
                     , stack: Vec::with_capacity(100)
