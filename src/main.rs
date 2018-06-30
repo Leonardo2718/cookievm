@@ -33,6 +33,7 @@ use std::io::BufReader;
 mod cookie_base;
 mod interpreter;
 mod thread;
+mod debugger;
 mod lexer;
 mod parser;
 
@@ -45,7 +46,6 @@ struct Options {
 }
 
 fn main() {
-    use thread::Thread;
     use lexer::*;
     use parser::*;
 
@@ -70,14 +70,20 @@ fn main() {
 
     let instructions = parse(Lexer::new(source.as_ref())).unwrap();
 
-    let mut thread = Thread::new(instructions);
-    if options.debug { match thread.debug() {
-        Ok(()) => {},
-        Err(msg) => println!("{}", msg),
-    }}
-    else { match thread.exec() {
-        Ok(Some(v)) => println!("\n-----\n{}", v),
-        Ok(None) => println!("\n-----"),
-        Err(msg) => println!("{}", msg),
-    }}
+    if options.debug {
+        let mut debugger = debugger::Debugger::new(instructions);
+        match debugger.debug() {
+            Ok(()) => {},
+            Err(msg) => println!("{}", msg),
+        }
+    }
+    else {
+        use thread::Thread;
+        let mut thread = Thread::new(instructions);
+        match thread.exec() {
+            Ok(Some(v)) => println!("\n-----\n{}", v),
+            Ok(None) => println!("\n-----"),
+            Err(msg) => println!("{}", msg),
+        }
+    }
 }
