@@ -101,6 +101,7 @@ pub enum Token {
     Address(usize),
     Char(char),
     Bool(bool),
+    StackPos(usize),
     Void,
     SP,
     FP,
@@ -170,18 +171,6 @@ impl<'a> fmt::Display for Error<'a> {
 }
 
 type Result<'a> = result::Result<TokenPos<'a>,Error<'a>>;
-
-// impl convert::From<num::ParseIntError> for LexerError {
-//     fn from(error: num::ParseIntError) -> Self {
-//         LexerError::ParseIntError(error)
-//     }
-// }
-
-// impl convert::From<num::ParseFloatError> for LexerError {
-//     fn from(error: num::ParseFloatError) -> Self {
-//         LexerError::ParseFloatError(error)
-//     }
-// }
 
 impl convert::From<LexerError> for String {
     fn from(error: LexerError) -> Self {
@@ -298,6 +287,13 @@ impl<'a> Lexer<'a> {
         self.emit(Token::Char(c))
     }
 
+    fn match_stack_pos(&mut self) -> Result<'a> {
+        let mut s = String::new();
+        eat_while!(self, |c:char| c.is_digit(10), |c:char| s.push(c));
+        let pos = s.clone().parse::<usize>().map_err(|e| Error{err: LexerError::ParseIntError(e), pos: self.token_pos})?;
+        self.emit(Token::StackPos(pos))
+    }
+
     fn match_reg(&mut self) -> Result<'a> {
         let mut s = String::new();
         match self.peek_char() {
@@ -385,6 +381,11 @@ impl<'a> Iterator for Lexer<'a> {
                         Some(c) => return Some(emit_err!(self, LexerError::UnexpectedCharacter(c))),
                         None => return Some(emit_err!(self, LexerError::ExpectingMoreCharacters))
                     };
+                }
+                Some('@') => {
+                    // an @ indicates the start of a stack position 
+                    lexer_try!(self.move_and_set_pos());
+                    return Some(self.match_stack_pos());
                 }
                 Some('$') => {
                     // a $ indicates the start of a register name, so the next characters must either
