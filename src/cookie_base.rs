@@ -326,9 +326,16 @@ impl BinaryOp {
 // cookie instructions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(Debug,Clone,Copy,PartialEq)]
-pub enum Loc {
-    Stack,
-    Reg(RegisterName),
+pub enum Source {
+    Immediate(Value),
+    Stack(usize),
+    Register(RegisterName),
+}
+
+#[derive(Debug,Clone,Copy,PartialEq)]
+pub enum Destination {
+    Stack(usize),
+    Register(RegisterName),
 }
 
 #[derive(Debug,Clone,PartialEq)]
@@ -345,18 +352,18 @@ pub enum Instruction {
     POPR(RegisterName),
     POP,
 
-    LOADFROM(Loc, Loc),
-    STORETO(Loc, Loc),
+    LOADFROM(Source, Source),
+    STORETO(Source, Source),
 
-    UOp(UnaryOp, Loc, Loc),
-    BOp(BinaryOp, Loc, Loc, Loc),
+    UOp(UnaryOp, Destination, Source),
+    BOp(BinaryOp, Destination, Source, Source),
 
     JUMP(Target),
-    DJUMP(Loc),
-    BRANCHON(Value, Target, Loc),
+    DJUMP(Source),
+    BRANCHON(Value, Target, Source),
 
-    PRINT(Loc),
-    READ(Type, Loc),
+    PRINT(Source),
+    READ(Type, Destination),
 
     EXIT,
 }
