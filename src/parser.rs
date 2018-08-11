@@ -141,6 +141,55 @@ fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<'a, RegisterName> {
     }
 }
 
+fn parse_source<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
+    macro_rules! parse_as_value (
+        ($id:tt, $val:tt) => ({
+            eat_token_!(lexer, LParen)?;
+            let v = eat_token!(lexer, $id)?;
+            eat_token_!(lexer, RParen)?;
+            Ok(Source::Immediate(Value::$val(v)))
+        })
+    );
+
+    macro_rules! parse_as_register (
+        ($reg:expr) => (Ok(Source::Register($reg)))
+    );
+
+    match lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+        Token::Void => Ok(Source::Immediate(Value::Void)),
+        Token::Ident(id) => match id.to_lowercase().as_ref() {
+            "i32" => parse_as_value!(Integer, I32),
+            "f32" => parse_as_value!(Float, F32),
+            "char" => parse_as_value!(Char, Char),
+            "bool" => parse_as_value!(Bool, Bool),
+            "iptr" => parse_as_value!(Address, IPtr),
+            "sptr" => parse_as_value!(Address, SPtr),
+            _id => return unexpected_id!(_id)
+        },
+        Token::SP => parse_as_register!(RegisterName::StackPointer),
+        Token::FP => parse_as_register!(RegisterName::FramePointer),
+        Token::PC => parse_as_register!(RegisterName::ProgramCounter),
+        Token::R(i) => parse_as_register!(RegisterName::R(i)),
+        Token::StackPos(p) => Ok(Source::Stack(p)),
+        _t => return unexpected_token!(_t),
+    }
+}
+
+fn parse_destination<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Destination> {
+    macro_rules! parse_as_register (
+        ($reg:expr) => (Ok(Destination::Register($reg)))
+    );
+
+    match lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+        Token::SP => parse_as_register!(RegisterName::StackPointer),
+        Token::FP => parse_as_register!(RegisterName::FramePointer),
+        Token::PC => parse_as_register!(RegisterName::ProgramCounter),
+        Token::R(i) => parse_as_register!(RegisterName::R(i)),
+        Token::StackPos(p) => Ok(Destination::Stack(p)),
+        _t => return unexpected_token!(_t),
+    }
+}
+
 fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
     match lexer.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
         Token::Void => Ok(Type::Void),
@@ -157,15 +206,15 @@ fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
     }
 }
 
-type LocParser<'a> = Fn(&mut Lexer<'a>) -> Result<'a, Loc>;
+// type LocParser<'a> = Fn(&mut Lexer<'a>) -> Result<'a, Loc>;
 
 /*
 This function acts as a continuation for parsing a register location
 in a v-instruction.
 */
-fn parse_regloc<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Loc> {
-    Ok(Loc::Reg(parse_register(lexer)?))
-}
+// fn parse_regloc<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Loc> {
+//     Ok(Loc::Reg(parse_register(lexer)?))
+// }
 
 /*
 This function is intended to mirror `parse_regloc`, acting as a
@@ -173,9 +222,9 @@ continuation for parsing a stack location in a v-instruction.
 Since stack locactions are implicit, not tokens are ever
 consumed on invocation.
 */
-fn parse_stackloc<'a>(_: &mut Lexer<'a>) -> Result<'a, Loc> {
-    Ok(Loc::Stack)
-}
+// fn parse_stackloc<'a>(_: &mut Lexer<'a>) -> Result<'a, Loc> {
+//     Ok(Loc::Stack)
+// }
 
 /*
 Helper for parsing an identifier as a v-instruction that takes
@@ -185,131 +234,187 @@ is found, the matching instruction is returned, consuming the
 tokens necessary to completely parse the instruction. If no
 match is found, None is returned and no tokens are consumed.
 */
-fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'a, Option<Instruction>> {
-    use cookie_base::Instruction::*;
-    use cookie_base::Target::*;
-    let inst = match ident.to_lowercase().as_ref() {
-        "djump" => {
-            let loc = parse_loc(lexer)?;
-            Some(DJUMP(loc))
-        },
-        "branchon" => {
-            let v = parse_value(lexer)?;
-            let loc = parse_loc(lexer)?;
-            let l = eat_token!(lexer, Ident)?;
-            Some(BRANCHON(v, UnresolvedSymbol(l), loc))
-        },
-        "print" => {
-            let loc = parse_loc(lexer)?;
-            Some(PRINT(loc))
-        },
-        "read" => {
-            let t = parse_type(lexer)?;
-            let loc = parse_loc(lexer)?;
-            Some(READ(t, loc))
-        },
-        _ => None
-    };
-    Ok(inst)
-}
+// fn parse_as_vinst1<'a>(ident: &String, lexer: &mut Lexer<'a>) -> Result<'a, Option<Instruction>> {
+//     use cookie_base::Instruction::*;
+//     use cookie_base::Target::*;
+//     let inst = match ident.to_lowercase().as_ref() {
+//         "djump" => {
+//             let src = parse_source(lexer)?;
+//             Some(DJUMP(src))
+//         },
+//         "branchon" => {
+//             let v = parse_value(lexer)?;
+//             let src = parse_source(lexer)?;
+//             let l = eat_token!(lexer, Ident)?;
+//             Some(BRANCHON(v, UnresolvedSymbol(l), src))
+//         },
+//         "print" => {
+//             let src = parse_source(lexer)?;
+//             Some(PRINT(src))
+//         },
+//         "read" => {
+//             let t = parse_type(lexer)?;
+//             let dest = parse_destination(lexer)?;
+//             Some(READ(t, dest))
+//         },
+//         _ => None
+//     };
+//     Ok(inst)
+// }
 
 /*
 Helper for parsing an identifier as a v-instruction that takes
 two location argument.
 */
-fn parse_as_vinst2<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>) -> Result<'a, Option<Instruction>> {
-    use cookie_base::Instruction::*;
-    use cookie_base::UnaryOp::*;
+// fn parse_as_vinst2<'a>(ident: &String, lexer: &mut Lexer<'a>) -> Result<'a, Option<Instruction>> {
+//     use cookie_base::Instruction::*;
+//     use cookie_base::UnaryOp::*;
 
-    macro_rules! gen_uop {
-        ($op:ident) => ({
-            let loc1 = parse_loc1(lexer)?;
-            let loc2 = parse_loc2(lexer)?;
-            Some(UOp($op, loc1, loc2))
-        })
-    }
+//     macro_rules! push_uop {
+//         ($op:ident) => ({
+//             let dest = parse_destination(lexer)?;
+//             let src = parse_source(lexer)?;
+//             Some(UOp($op, dest, src))
+//         })
+//     }
 
-    let inst = match ident.to_lowercase().as_ref() {
-        "neg" => gen_uop!(NEG),
-        "not" => gen_uop!(NOT),
-        "cvt" => {
-            let t = parse_type(lexer)?;
-            let loc1 = parse_loc1(lexer)?;
-            let loc2 = parse_loc2(lexer)?;
-            Some(UOp(CVT(t), loc1, loc2))
-        }
-        "loadfrom" => {
-            let loc1 = parse_loc1(lexer)?;
-            let loc2 = parse_loc2(lexer)?;
-            Some(LOADFROM(loc1, loc2))
-        },
-        "storeto" => {
-            let loc1 = parse_loc1(lexer)?;
-            let loc2 = parse_loc2(lexer)?;
-            Some(STORETO(loc1, loc2))
-        },
-        _ => None
-    };
-    Ok(inst)
-}
+//     let inst = match ident.to_lowercase().as_ref() {
+//         "neg" => push_uop!(NEG),
+//         "not" => push_uop!(NOT),
+//         "cvt" => {
+//             let t = parse_type(lexer)?;
+//             let dest = parse_destination(lexer)?;
+//             let src = parse_source(lexer)?;
+//             Some(UOp(CVT(t), dest, src))
+//         }
+//         "loadfrom" => {
+//             let dest = parse_destination(lexer)?;
+//             let src = parse_source(lexer)?;
+//             Some(LOADFROM(dest, src))
+//         },
+//         "storeto" => {
+//             let dest = parse_destination(lexer)?;
+//             let src = parse_source(lexer)?;
+//             Some(STORETO(dest, src))
+//         },
+//         _ => None
+//     };
+//     Ok(inst)
+// }
 
 /*
 Helper for parsing an identifier as a v-instruction that takes
 three location arguments.
 */
-fn parse_as_vinst3<'a>(ident: &String, lexer: &mut Lexer<'a>, parse_loc1: &LocParser<'a>, parse_loc2: &LocParser<'a>, parse_loc3: &LocParser<'a>) -> Result<'a, Option<Instruction>> {
-    use cookie_base::Instruction::*;
-    use cookie_base::BinaryOp::*;
+// fn parse_as_vinst3<'a>(ident: &String, lexer: &mut Lexer<'a>) -> Result<'a, Option<Instruction>> {
+//     use cookie_base::Instruction::*;
+//     use cookie_base::BinaryOp::*;
 
-    macro_rules! gen_bop {
-        ($op:ident) => ({
-            let loc1 = parse_loc1(lexer)?;
-            let loc2 = parse_loc2(lexer)?;
-            let loc3 = parse_loc3(lexer)?;
-            Some(BOp($op, loc1, loc2, loc3))
-        })
-    }
+//     macro_rules! push_bop {
+//         ($op:ident) => ({
+//             let dest = parse_destination(lexer)?;
+//             let src1 = parse_source(lexer)?;
+//             let src2 = parse_source(lexer)?;
+//             Some(BOp($op, dest, src1, src2))
+//         })
+//     }
 
-    let inst = match ident.to_lowercase().as_ref() {
-        "add" => gen_bop!(ADD),
-        "sub" => gen_bop!(SUB),
-        "mul" => gen_bop!(MUL),
-        "div" => gen_bop!(DIV),
-        "mod" => gen_bop!(MOD),
-        "eq" => gen_bop!(EQ),
-        "lt" => gen_bop!(LT),
-        "le" => gen_bop!(LE),
-        "gt" => gen_bop!(GT),
-        "ge" => gen_bop!(GE),
-        "and" => gen_bop!(AND),
-        "or" => gen_bop!(OR),
-        "xor" => gen_bop!(XOR),
-        _ => None
-    };
-    Ok(inst)
-}
-
-fn parse_vinst<'a>(lexer: &mut Lexer<'a>, parse_loc: &LocParser<'a>) -> Result<'a, Instruction> {
-    let id = eat_token!(lexer, Ident)?;
-    parse_as_vinst1(&id, lexer, parse_loc).transpose()
-        .or_else(|| parse_as_vinst2(&id, lexer, parse_loc, parse_loc).transpose())
-        .or_else(|| parse_as_vinst3(&id, lexer, parse_loc, parse_loc, parse_loc).transpose())
-        .unwrap_or(unexpected_id!(id))
-}
+//     let inst = match ident.to_lowercase().as_ref() {
+//         "add" => push_bop!(ADD),
+//         "sub" => push_bop!(SUB),
+//         "mul" => push_bop!(MUL),
+//         "div" => push_bop!(DIV),
+//         "mod" => push_bop!(MOD),
+//         "eq" => push_bop!(EQ),
+//         "lt" => push_bop!(LT),
+//         "le" => push_bop!(LE),
+//         "gt" => push_bop!(GT),
+//         "ge" => push_bop!(GE),
+//         "and" => push_bop!(AND),
+//         "or" => push_bop!(OR),
+//         "xor" => push_bop!(XOR),
+//         _ => None
+//     };
+//     Ok(inst)
+// }
 
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
     use cookie_base::Instruction::*;
+    use cookie_base::BinaryOp::*;
+    use cookie_base::UnaryOp::*;
     use cookie_base::Target::*;
     let mut insts: Vec<Instruction> = Vec::new();
     let mut symbols: SymbolTable = HashMap::new();
 
+    macro_rules! push_bop {
+        ($op:ident) => ({
+            let dest = parse_destination(&mut lexer)?;
+            let src1 = parse_source(&mut lexer)?;
+            let src2 = parse_source(&mut lexer)?;
+            insts.push(BOp($op, dest, src1, src2));
+        })
+    }
+
+    macro_rules! push_uop {
+        ($op:ident) => ({
+            let dest = parse_destination(&mut lexer)?;
+            let src = parse_source(&mut lexer)?;
+            insts.push(UOp($op, dest, src));
+        })
+    }
+
     loop {
         match lexer.next().transpose()?.map(|t| t.token) {
             Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
-                "s" => {
-                    eat_token_!(lexer, Dot)?;
-                    let inst = parse_vinst(&mut lexer, &parse_stackloc)?;
-                    insts.push(inst);
+                "add" => push_bop!(ADD),
+                "sub" => push_bop!(SUB),
+                "mul" => push_bop!(MUL),
+                "div" => push_bop!(DIV),
+                "mod" => push_bop!(MOD),
+                "eq" => push_bop!(EQ),
+                "lt" => push_bop!(LT),
+                "le" => push_bop!(LE),
+                "gt" => push_bop!(GT),
+                "ge" => push_bop!(GE),
+                "and" => push_bop!(AND),
+                "or" => push_bop!(OR),
+                "xor" => push_bop!(XOR),
+                "neg" => push_uop!(NEG),
+                "not" => push_uop!(NOT),
+                "cvt" => {
+                    let t = parse_type(&mut lexer)?;
+                    let dest = parse_destination(&mut lexer)?;
+                    let src = parse_source(&mut lexer)?;
+                    insts.push(UOp(CVT(t), dest, src));
+                }
+                "loadfrom" => {
+                    let dest = parse_destination(&mut lexer)?;
+                    let src = parse_source(&mut lexer)?;
+                    insts.push(LOADFROM(dest, src));
+                },
+                "storeto" => {
+                    let dest = parse_destination(&mut lexer)?;
+                    let src = parse_source(&mut lexer)?;
+                    insts.push(STORETO(dest, src));
+                },
+                "djump" => {
+                    let src = parse_source(&mut lexer)?;
+                    insts.push(DJUMP(src));
+                },
+                "branchon" => {
+                    let v = parse_value(&mut lexer)?;
+                    let src = parse_source(&mut lexer)?;
+                    let l = eat_token!(lexer, Ident)?;
+                    insts.push(BRANCHON(v, UnresolvedSymbol(l), src));
+                },
+                "print" => {
+                    let src = parse_source(&mut lexer)?;
+                    insts.push(PRINT(src));
+                },
+                "read" => {
+                    let t = parse_type(&mut lexer)?;
+                    let dest = parse_destination(&mut lexer)?;
+                    insts.push(READ(t, dest));
                 },
                 "pushc" => {
                     let val = parse_value(&mut lexer)?;
@@ -347,31 +452,37 @@ mod test {
 
     #[test]
     fn parse_vinst_test_1() {
-        let inst = parse_vinst(&mut Lexer::new("Add"), &parse_stackloc).unwrap();
-        assert_eq!(inst, Instruction::BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack));
+        let inst = parse_vinst(&mut Lexer::new("Add @0 @1 @0")).unwrap();
+        assert_eq!(inst, Instruction::BOp(BinaryOp::ADD,
+                                          Destination::Stack(0), 
+                                          Source::Stack(1), 
+                                          Source::Stack(0)));
     }
 
     #[test]
     fn parse_vinst_test_2() {
-        let inst = parse_vinst(&mut Lexer::new("EQ"), &parse_stackloc).unwrap();
-        assert_eq!(inst, Instruction::BOp(BinaryOp::EQ, Loc::Stack, Loc::Stack, Loc::Stack));
+        let inst = parse_vinst(&mut Lexer::new("EQ @0 @1 @0")).unwrap();
+        assert_eq!(inst, Instruction::BOp(BinaryOp::EQ,
+                                          Destination::Stack(0), 
+                                          Source::Stack(1), 
+                                          Source::Stack(0)));
     }
 
     #[test]
     fn parse_vinst_test_3() {
-        let inst = parse_vinst(&mut Lexer::new("NOT"), &parse_stackloc).unwrap();
-        assert_eq!(inst, Instruction::UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack));
+        let inst = parse_vinst(&mut Lexer::new("NOT @0 @0")).unwrap();
+        assert_eq!(inst, Instruction::UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0)));
     }
 
     #[test]
     fn parse_vinst_test_4() {
-        assert!(parse_vinst(&mut Lexer::new("foo"), &parse_stackloc).is_err());
+        assert!(parse_vinst(&mut Lexer::new("foo")).is_err());
     }
 
     #[test]
     fn parse_vinst_test_5() {
-        let inst = parse_vinst(&mut Lexer::new("CVT F32"), &parse_stackloc).unwrap();
-        assert_eq!(inst, Instruction::UOp(UnaryOp::CVT(Type::F32), Loc::Stack, Loc::Stack));
+        let inst = parse_vinst(&mut Lexer::new("CVT F32 @0 @0")).unwrap();
+        assert_eq!(inst, Instruction::UOp(UnaryOp::CVT(Type::F32), Destination::Stack(0), Source::Stack(0)));
     }
 
     #[test]
