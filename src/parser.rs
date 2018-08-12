@@ -393,7 +393,7 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                     insts.push(LOADFROM(dest, src));
                 },
                 "storeto" => {
-                    let dest = parse_destination(&mut lexer)?;
+                    let dest = parse_source(&mut lexer)?;
                     let src = parse_source(&mut lexer)?;
                     insts.push(STORETO(dest, src));
                 },
@@ -452,8 +452,9 @@ mod test {
 
     #[test]
     fn parse_vinst_test_1() {
-        let inst = parse_vinst(&mut Lexer::new("Add @0 @1 @0")).unwrap();
-        assert_eq!(inst, Instruction::BOp(BinaryOp::ADD,
+        let insts = parse(Lexer::new("Add @0 @1 @0")).unwrap();
+        assert_eq!(insts.len(), 1);
+        assert_eq!(insts[0], Instruction::BOp(BinaryOp::ADD,
                                           Destination::Stack(0), 
                                           Source::Stack(1), 
                                           Source::Stack(0)));
@@ -461,8 +462,9 @@ mod test {
 
     #[test]
     fn parse_vinst_test_2() {
-        let inst = parse_vinst(&mut Lexer::new("EQ @0 @1 @0")).unwrap();
-        assert_eq!(inst, Instruction::BOp(BinaryOp::EQ,
+        let insts = parse(Lexer::new("EQ @0 @1 @0")).unwrap();
+        assert_eq!(insts.len(), 1);
+        assert_eq!(insts[0], Instruction::BOp(BinaryOp::EQ,
                                           Destination::Stack(0), 
                                           Source::Stack(1), 
                                           Source::Stack(0)));
@@ -470,19 +472,21 @@ mod test {
 
     #[test]
     fn parse_vinst_test_3() {
-        let inst = parse_vinst(&mut Lexer::new("NOT @0 @0")).unwrap();
-        assert_eq!(inst, Instruction::UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0)));
+        let insts = parse(Lexer::new("NOT @0 @0")).unwrap();
+        assert_eq!(insts.len(), 1);
+        assert_eq!(insts[0], Instruction::UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0)));
     }
 
     #[test]
     fn parse_vinst_test_4() {
-        assert!(parse_vinst(&mut Lexer::new("foo")).is_err());
+        assert!(parse(Lexer::new("foo")).is_err());
     }
 
     #[test]
     fn parse_vinst_test_5() {
-        let inst = parse_vinst(&mut Lexer::new("CVT F32 @0 @0")).unwrap();
-        assert_eq!(inst, Instruction::UOp(UnaryOp::CVT(Type::F32), Destination::Stack(0), Source::Stack(0)));
+        let insts = parse(Lexer::new("CVT F32 @0 @0")).unwrap();
+        assert_eq!(insts.len(), 1);
+        assert_eq!(insts[0], Instruction::UOp(UnaryOp::CVT(Type::F32), Destination::Stack(0), Source::Stack(0)));
     }
 
     #[test]
@@ -619,11 +623,11 @@ mod test {
 
     #[test]
     fn parser_test_2() {
-        let insts = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) s.add")).unwrap();
+        let insts = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) add @0 @1 @0")).unwrap();
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(3.1)));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(4.2)));
-        assert_eq!(*iter.next().unwrap(), BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack));
+        assert_eq!(*iter.next().unwrap(), BOp(BinaryOp::ADD, Destination::Stack(0), Source::Stack(1), Source::Stack(0)));
         assert!(iter.next().is_none());
     }
 

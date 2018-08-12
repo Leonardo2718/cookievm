@@ -352,7 +352,7 @@ pub enum Instruction {
     POPR(RegisterName),
     POP,
 
-    LOADFROM(Source, Source),
+    LOADFROM(Destination, Source),
     STORETO(Source, Source),
 
     UOp(UnaryOp, Destination, Source),

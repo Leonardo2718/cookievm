@@ -167,7 +167,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::I32(2)),
-            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
+            BOp(BinaryOp::ADD, Destination::Stack(0), Source::Stack(1), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
@@ -178,7 +178,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::IPtr(0x7ab)),
             PUSHC(Value::I32(4)),
-            BOp(BinaryOp::SUB, Loc::Stack, Loc::Stack, Loc::Stack),
+            BOp(BinaryOp::SUB, Destination::Stack(0), Source::Stack(1), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::IPtr(0x7a7));
@@ -189,7 +189,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::F32(4.0)),
             PUSHC(Value::I32(4)),
-            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
+            BOp(BinaryOp::ADD, Destination::Stack(0), Source::Stack(1), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert!(thread.exec().is_err());
@@ -200,7 +200,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::I32(4)),
-            BOp(BinaryOp::MUL, Loc::Stack, Loc::Stack, Loc::Stack),
+            BOp(BinaryOp::MUL, Destination::Stack(0), Source::Stack(1), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert!(thread.exec().is_err());
@@ -210,7 +210,7 @@ mod test {
     fn uniop_test_1() {
         let insts = vec![
             PUSHC(Value::I32(3)),
-            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-3));
@@ -220,7 +220,7 @@ mod test {
     fn uniop_test_2() {
         let insts = vec![
             PUSHC(Value::F32(2.71828)),
-            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::F32(-2.71828));
@@ -230,7 +230,7 @@ mod test {
     fn uniop_test_3() {
         let insts = vec![
             PUSHC(Value::Bool(false)),
-            UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
@@ -240,7 +240,7 @@ mod test {
     fn uniop_test_4() {
         let insts = vec![
             PUSHC(Value::I32(0)),
-            UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
@@ -250,7 +250,7 @@ mod test {
     fn uniop_test_5() {
         let insts = vec![
             PUSHC(Value::Void),
-            UOp(UnaryOp::NOT, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert!(thread.exec().is_err());
@@ -260,7 +260,7 @@ mod test {
     fn uniop_test_6() {
         let insts = vec![
             PUSHC(Value::F32(3.14)),
-            UOp(UnaryOp::CVT(Type::I32), Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::CVT(Type::I32), Destination::Stack(0), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
@@ -385,7 +385,7 @@ mod test {
             JUMP(LocalSymbol(4, "symbol".to_string())),
             POP,
             PUSHC(Value::I32(2)),
-            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut symbols: SymbolTable = HashMap::new();
         symbols.insert("symbol".to_string(), 4);
@@ -407,10 +407,10 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::IPtr(5)),
-            DJUMP(Loc::Stack),
+            DJUMP(Source::Stack(0)),
             POP,
             PUSHC(Value::Void),
-            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
@@ -420,7 +420,7 @@ mod test {
     fn djump_test_2() {
         let insts = vec![
             PUSHC(Value::I32(0)),
-            DJUMP(Loc::Stack),
+            DJUMP(Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert!(thread.exec().is_err());
@@ -431,10 +431,10 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(1)),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(true), LocalSymbol(5, "symbol".to_string()), Loc::Stack),
+            BRANCHON(Value::Bool(true), LocalSymbol(5, "symbol".to_string()), Source::Stack(0)),
             POP,
             PUSHC(Value::Void),
-            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut symbols: SymbolTable = HashMap::new();
         symbols.insert("symbol".to_string(), 5);
@@ -447,10 +447,10 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(false), LocalSymbol(5, "symbol".to_string()), Loc::Stack),
+            BRANCHON(Value::Bool(false), LocalSymbol(5, "symbol".to_string()), Source::Stack(0)),
             POP,
             PUSHC(Value::I32(-1)),
-            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut symbols: SymbolTable = HashMap::new();
         symbols.insert("symbol".to_string(), 5);
@@ -463,10 +463,10 @@ mod test {
         let insts = vec![
             PUSHC(Value::Void),
             PUSHC(Value::Bool(true)),
-            BRANCHON(Value::I32(1), LocalSymbol(5, "symbol".to_string()), Loc::Stack),
+            BRANCHON(Value::I32(1), LocalSymbol(5, "symbol".to_string()), Source::Stack(0)),
             POP,
             PUSHC(Value::I32(-1)),
-            UOp(UnaryOp::NEG, Loc::Stack, Loc::Stack),
+            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
         ];
         let mut symbols: SymbolTable = HashMap::new();
         symbols.insert("symbol".to_string(), 5);
@@ -479,8 +479,8 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(2)),
             PUSHR(RegisterName::StackPointer),
-            LOADFROM(Loc::Stack, Loc::Stack),
-            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
+            LOADFROM(Destination::Stack(0), Source::Stack(0)),
+            BOp(BinaryOp::ADD, Destination::Stack(0), Source::Stack(1), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(4));
@@ -491,8 +491,8 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(2)),
             PUSHC(Value::I32(1)),
-            LOADFROM(Loc::Stack, Loc::Stack),
-            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
+            LOADFROM(Destination::Stack(0), Source::Stack(0)),
+            BOp(BinaryOp::ADD, Destination::Stack(0), Source::Stack(1), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert!(thread.exec().is_err());
@@ -505,8 +505,8 @@ mod test {
             PUSHC(Value::I32(1)),
             PUSHC(Value::I32(0)),
             PUSHC(Value::SPtr(0x1)),
-            STORETO(Loc::Stack, Loc::Stack),
-            BOp(BinaryOp::ADD, Loc::Stack, Loc::Stack, Loc::Stack),
+            STORETO(Source::Stack(0), Source::Stack(1)),
+            BOp(BinaryOp::ADD, Destination::Stack(0), Source::Stack(1), Source::Stack(0)),
         ];
         let mut thread = Thread::new(insts);
         assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(1));
@@ -517,7 +517,7 @@ mod test {
         let insts = vec![
             PUSHC(Value::I32(2)),
             PUSHC(Value::I32(1)),
-            STORETO(Loc::Stack, Loc::Stack),
+            STORETO(Source::Stack(0), Source::Stack(1)),
         ];
         let mut thread = Thread::new(insts);
         assert!(thread.exec().is_err());

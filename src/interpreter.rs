@@ -40,6 +40,9 @@ pub enum InterpreterError {
     AttemptedJumpToNonIPtr(cookie::Value),
     TypeMismatchError(cookie::Type,cookie::Value),
     BadInputType(cookie::Type),
+    BadSource(cookie::Source),
+    BadSourceCombination(cookie::Source,cookie::Source),
+    BadDestination(cookie::Destination),
     StackUnderflow,
     StackOverflow,
     UndefinedSymbol(String),
@@ -66,6 +69,9 @@ impl error::Error for InterpreterError {
             &AttemptedJumpToNonIPtr(_) => "Attempted to jump to non-IPtr (non instruction address)",
             &TypeMismatchError(_,_) => "Got value of unexpected type",
             &BadInputType(_) => "Cannot read input of given type",
+            &BadSource(_) => "Specified source operand is invalid",
+            &BadSourceCombination(_,_) => "Specified source operands are invalid",
+            &BadDestination(_) => "Specified result destination is invalid",
             &StackUnderflow => "Attempted to pop value but stack is empty",
             &StackOverflow => "Attempted to push value but stack is full",
             &UndefinedSymbol(_) => "Attempted to reference a symbol that does not exist",
@@ -189,9 +195,8 @@ impl Interpreter {
                 self.pc + 1
             },
             STORETO(dest, src) => {
-                let dest_val = self.get_value(dest)?;
+                let (dest_val, val) = self.get_values(dest, src)?;
                 let addr = expect_value!(dest_val, SPtr, InterpreterError::AttemptedLoadFromNonSPtr(dest_val))?;
-                let val = self.get_value(src)?;
                 self.stack[addr - 1] = val;
                 self.pc + 1
             },
@@ -202,8 +207,7 @@ impl Interpreter {
                 self.pc + 1
             },
             BOp(op, dest, lhs, rhs) => {
-                let rhs_v = self.get_value(rhs)?;
-                let lhs_v = self.get_value(lhs)?;
+                let (lhs_v, rhs_v) = self.get_values(lhs, rhs)?;
                 let res = op.apply_to(lhs_v, rhs_v)?;
                 self.put_value(dest, res)?;
                 self.pc + 1
@@ -279,20 +283,36 @@ impl Interpreter {
         self.register_put(reg, val)?;
         Ok(())
     }
-
-    fn get_value(&mut self, loc: cookie::Loc) -> Result<cookie::Value> {
-        use self::cookie::Loc;
-        match loc {
-            Loc::Stack => self.pop(),
-            Loc::Reg(r) => self.register_get(r),
+    
+    fn get_values(&mut self, srcl: cookie::Source, srcr: cookie::Source) -> Result<(cookie::Value, cookie::Value)> {
+        use self::cookie::Source::*;
+        match (srcl, srcr) {
+            (Register(l), Register(r)) => { Ok((self.register_get(l)?, self.register_get(r)?)) }
+            (Register(l), Immediate(r)) => { Ok((self.register_get(l)?, r)) }
+            (Immediate(l), Immediate(r)) => { Ok((l, r)) }
+            (Immediate(l), Register(r)) => { Ok((l, self.register_get(r)?)) }
+            (Stack(1), Stack(0)) => { let r = self.pop()?; let l = self.pop()?; Ok((l,r)) }
+            (Stack(0), Stack(1)) => { let l = self.pop()?; let r = self.pop()?; Ok((l,r)) }
+            (l, r) => Err(InterpreterError::BadSourceCombination(l,r))
         }
     }
 
-    fn put_value(&mut self, loc: cookie::Loc, val: cookie::Value) -> Result<()> {
-        use self::cookie::Loc;
-        match loc {
-            Loc::Stack => { self.stack.push(val); Ok(()) },
-            Loc::Reg(r) => self.register_put(r, val),
+    fn get_value(&mut self, src: cookie::Source) -> Result<cookie::Value> {
+        use self::cookie::Source::*;
+        match src {
+            Register(r) => self.register_get(r),
+            Immediate(v) => Ok(v),
+            Stack(0) => self.pop(),
+            _ => Err(InterpreterError::BadSource(src))
+        }
+    }
+
+    fn put_value(&mut self, dest: cookie::Destination, val: cookie::Value) -> Result<()> {
+        use self::cookie::Destination::*;
+        match dest {
+            Register(r) => self.register_put(r, val),
+            Stack(0) => { self.stack.push(val); Ok(()) },
+            _ => Err(InterpreterError::BadDestination(dest))
         }
     }
 
