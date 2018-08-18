@@ -149,7 +149,7 @@ impl<'a> error::Error for Error<'a> {
         use self::LexerError::*;
         match self.err {
             ExpectingMoreCharacters => "Lexer expected more characters for a complete token",
-            UnexpectedCharacter(c) => "Lexer encountered an unexpected character",
+            UnexpectedCharacter(_) => "Lexer encountered an unexpected character",
             ParseIntError(_) => "Lexer failed to parse character sequence as an integer value (see cause)",
             ParseFloatError(_) => "Lexer failed to parse character sequence as a floating point value (see cause)",
         }
