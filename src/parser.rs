@@ -204,6 +204,25 @@ fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
     }
 }
 
+fn parse_ss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Source, Source)> {
+    let src1 = parse_source(lexer)?;
+    let src2 = parse_source(lexer)?;
+    Ok((src1, src2))
+}
+
+fn parse_ds<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source)> {
+    let dest = parse_destination(lexer)?;
+    let src = parse_source(lexer)?;
+    Ok((dest, src))
+}
+
+fn parse_dss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source, Source)> {
+    let dest = parse_destination(lexer)?;
+    let src1 = parse_source(lexer)?;
+    let src2 = parse_source(lexer)?;
+    Ok((dest, src1, src2))
+}
+
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
     use cookie_base::Instruction::*;
     use cookie_base::BinaryOp::*;
@@ -214,17 +233,14 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
 
     macro_rules! push_bop {
         ($op:ident) => ({
-            let dest = parse_destination(&mut lexer)?;
-            let src1 = parse_source(&mut lexer)?;
-            let src2 = parse_source(&mut lexer)?;
+            let (dest, src1, src2) = parse_dss(&mut lexer)?;
             insts.push(BOp($op, dest, src1, src2));
         })
     }
 
     macro_rules! push_uop {
         ($op:ident) => ({
-            let dest = parse_destination(&mut lexer)?;
-            let src = parse_source(&mut lexer)?;
+            let (dest, src) = parse_ds(&mut lexer)?;
             insts.push(UOp($op, dest, src));
         })
     }
@@ -249,18 +265,15 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "not" => push_uop!(NOT),
                 "cvt" => {
                     let t = parse_type(&mut lexer)?;
-                    let dest = parse_destination(&mut lexer)?;
-                    let src = parse_source(&mut lexer)?;
+                    let (dest, src) = parse_ds(&mut lexer)?;
                     insts.push(UOp(CVT(t), dest, src));
                 }
                 "loadfrom" => {
-                    let dest = parse_destination(&mut lexer)?;
-                    let src = parse_source(&mut lexer)?;
+                    let (dest, src) = parse_ds(&mut lexer)?;
                     insts.push(LOADFROM(dest, src));
                 },
                 "storeto" => {
-                    let dest = parse_source(&mut lexer)?;
-                    let src = parse_source(&mut lexer)?;
+                    let (dest, src) = parse_ss(&mut lexer)?;
                     insts.push(STORETO(dest, src));
                 },
                 "djump" => {
