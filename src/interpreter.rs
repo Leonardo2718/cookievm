@@ -194,7 +194,7 @@ impl Interpreter {
                 self.put_value(dest, val)?;
                 self.pc + 1
             },
-            STORETO(dest, src) => {
+            STORETO(src, dest) => {
                 let (dest_val, val) = self.get_values(dest, src)?;
                 let addr = expect_value!(dest_val, SPtr, InterpreterError::AttemptedLoadFromNonSPtr(dest_val))?;
                 self.stack[addr - 1] = val;

@@ -109,7 +109,8 @@ pub enum Token {
     R(u8),
     LParen,
     RParen,
-    Dot,
+    ExclamationMark,
+    QuestionMark,
 }
 
 impl fmt::Display for Token {
@@ -178,6 +179,7 @@ impl convert::From<LexerError> for String {
     }
 }
 
+#[derive(Debug,Clone)]
 pub struct Lexer<'a> {
     iter: CharPosIter<'a>,
     token_pos: Position<'a>
@@ -367,7 +369,8 @@ impl<'a> Iterator for Lexer<'a> {
             match self.peek_char() {
                 Some('(') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::LParen)); }
                 Some(')') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::RParen)); }
-                Some('.') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::Dot)); }
+                Some('!') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::ExclamationMark)); }
+                Some('?') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::QuestionMark)); }
                 Some(';') => { eat_while!(self, |c| c != '\n', |_| ()); self.next_char(); continue; }
                 Some('-') => { lexer_try!(self.move_and_set_pos()); let r = self.match_negative(); return Some(r); }
                 Some(c) if c.is_whitespace() => { lexer_try!(self.move_and_set_pos()); continue; }
@@ -474,8 +477,8 @@ mod test{
 
     #[test]
     fn lexer_test_7() {
-        let mut lexer = Lexer::new(".");
-        assert_next_is!(lexer, Dot, 1, 1, 1);
+        let mut lexer = Lexer::new("!");
+        assert_next_is!(lexer, ExclamationMark, 1, 1, 1);
         assert!(lexer.next().is_none());
     }
 
@@ -672,5 +675,28 @@ mod test{
     fn lexer_test_33() {
         let mut lexer = Lexer::new("0");
         assert_next_is!(lexer, Integer(0), 1, 1, 1);
+    }
+
+    #[test]
+    fn lexer_test_34() {
+        let mut lexer = Lexer::new("?");
+        assert_next_is!(lexer, QuestionMark, 1, 1, 1);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_35() {
+        let mut lexer = Lexer::new("Add !");
+        assert_next_is!(lexer, Ident("Add".to_string()), 1, 1, 1);
+        assert_next_is!(lexer, ExclamationMark, 5, 1, 5);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_36() {
+        let mut lexer = Lexer::new("Sub ?");
+        assert_next_is!(lexer, Ident("Sub".to_string()), 1, 1, 1);
+        assert_next_is!(lexer, QuestionMark, 5, 1, 5);
+        assert!(lexer.next().is_none());
     }
 }
