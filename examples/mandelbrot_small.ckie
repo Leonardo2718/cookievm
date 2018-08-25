@@ -1,29 +1,27 @@
-; code generated milc compiler
-
 main__:
     PUSHR $sp       ; Allocation 2 stack slots
     PUSHC I32(2)    ; |
-    S.ADD           ; |
+    ADD!            ; |
     POPR $sp        ; ^
 label_0:
     PUSHC I32(0)
     PUSHR $fp       ; Calculating stack frame for "px"
     PUSHC I32(1)    ; Calculating frame postion for "px"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "px"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "px"
     PUSHC I32(0)
     PUSHR $fp       ; Calculating stack frame for "py"
     PUSHC I32(2)    ; Calculating frame postion for "py"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "py"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "py"
 label_3:
     PUSHR $fp       ; Calculating stack frame for "py"
     PUSHC I32(2)    ; Calculating frame postion for "py"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "py" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "py" to stack
     PUSHC I32(40)
-    S.LT
-    S.BRANCHON Bool(False) label_2
+    LT!
+    BRANCHON Bool(False) ! label_2
 label_38:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -32,14 +30,14 @@ label_38:
 label_5:
     PUSHR $fp       ; Calculating stack frame for "px"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(1)    ; Calculating frame postion for "px"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "px" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "px" to stack
     PUSHC I32(80)
-    S.LT
-    S.BRANCHON Bool(False) label_4
+    LT!
+    BRANCHON Bool(False) ! label_4
 label_32:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -47,103 +45,105 @@ label_32:
     POPR $fp
     PUSHR $sp       ; Allocation 6 stack slots
     PUSHC I32(6)    ; |
-    S.ADD           ; |
+    ADD!            ; |
     POPR $sp        ; ^
     PUSHR $fp       ; Calculating stack frame for "px"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(1)    ; Calculating frame postion for "px"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "px" to stack
-    S.CVT F32
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "px" to stack
+    CVT F32!
     PUSHC F32(80.0)
-    S.DIV
+    DIV!
     PUSHC F32(3.5)
-    S.MUL
+    MUL!
     PUSHC F32(2.5)
-    S.SUB
+    SUB!
     PUSHR $fp       ; Calculating stack frame for "x0"
     PUSHC I32(1)    ; Calculating frame postion for "x0"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "x0"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "x0"
     PUSHR $fp       ; Calculating stack frame for "py"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(2)    ; Calculating frame postion for "py"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "py" to stack
-    S.CVT F32
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "py" to stack
+    CVT F32!
     PUSHC F32(40.0)
-    S.DIV
+    DIV!
     PUSHC F32(2.0)
-    S.MUL
+    MUL!
     PUSHC F32(1.0)
-    S.SUB
+    SUB!
     PUSHR $fp       ; Calculating stack frame for "y0"
     PUSHC I32(2)    ; Calculating frame postion for "y0"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "y0"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "y0"
     PUSHC F32(0.0)
     PUSHR $fp       ; Calculating stack frame for "x"
     PUSHC I32(3)    ; Calculating frame postion for "x"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "x"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "x"
     PUSHC F32(0.0)
     PUSHR $fp       ; Calculating stack frame for "y"
     PUSHC I32(4)    ; Calculating frame postion for "y"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "y"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "y"
     PUSHC I32(0)
     PUSHR $fp       ; Calculating stack frame for "iteration"
     PUSHC I32(5)    ; Calculating frame postion for "iteration"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "iteration"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "iteration"
     PUSHC I32(1000)
     PUSHR $fp       ; Calculating stack frame for "max"
     PUSHC I32(6)    ; Calculating frame postion for "max"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "max"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "max"
 label_13:
     PUSHR $fp       ; Calculating stack frame for "x"
     PUSHC I32(3)    ; Calculating frame postion for "x"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "x" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "x" to stack
     PUSHR $fp       ; Calculating stack frame for "x"
     PUSHC I32(3)    ; Calculating frame postion for "x"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "x" to stack
-    S.MUL
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "x" to stack
+    MUL!
     PUSHR $fp       ; Calculating stack frame for "y"
     PUSHC I32(4)    ; Calculating frame postion for "y"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "y" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "y" to stack
     PUSHR $fp       ; Calculating stack frame for "y"
     PUSHC I32(4)    ; Calculating frame postion for "y"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "y" to stack
-    S.MUL
-    S.ADD
-    PUSHC F32(4.0)
-    S.LT
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "y" to stack
+    MUL!
+    ADD!
+    PUSHC F32(2.0)
+    PUSHC F32(2.0)
+    MUL!
+    LT!
     PUSHR $fp       ; Calculating stack frame for "iteration"
     PUSHC I32(5)    ; Calculating frame postion for "iteration"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "iteration" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "iteration" to stack
     PUSHR $fp       ; Calculating stack frame for "max"
     PUSHC I32(6)    ; Calculating frame postion for "max"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "max" to stack
-    S.LT
-    S.AND
-    S.BRANCHON Bool(False) label_12
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "max" to stack
+    LT!
+    AND!
+    BRANCHON Bool(False) ! label_12
 label_18:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -151,113 +151,113 @@ label_18:
     POPR $fp
     PUSHR $sp       ; Allocation 1 stack slots
     PUSHC I32(1)    ; |
-    S.ADD           ; |
+    ADD!            ; |
     POPR $sp        ; ^
     PUSHR $fp       ; Calculating stack frame for "x"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(3)    ; Calculating frame postion for "x"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "x" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "x" to stack
     PUSHR $fp       ; Calculating stack frame for "x"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(3)    ; Calculating frame postion for "x"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "x" to stack
-    S.MUL
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "x" to stack
+    MUL!
     PUSHR $fp       ; Calculating stack frame for "y"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(4)    ; Calculating frame postion for "y"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "y" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "y" to stack
     PUSHR $fp       ; Calculating stack frame for "y"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(4)    ; Calculating frame postion for "y"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "y" to stack
-    S.MUL
-    S.SUB
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "y" to stack
+    MUL!
+    SUB!
     PUSHR $fp       ; Calculating stack frame for "x0"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(1)    ; Calculating frame postion for "x0"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "x0" to stack
-    S.ADD
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "x0" to stack
+    ADD!
     PUSHR $fp       ; Calculating stack frame for "xtemp"
     PUSHC I32(1)    ; Calculating frame postion for "xtemp"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "xtemp"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "xtemp"
     PUSHC F32(2.0)
     PUSHR $fp       ; Calculating stack frame for "x"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(3)    ; Calculating frame postion for "x"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "x" to stack
-    S.MUL
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "x" to stack
+    MUL!
     PUSHR $fp       ; Calculating stack frame for "y"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(4)    ; Calculating frame postion for "y"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "y" to stack
-    S.MUL
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "y" to stack
+    MUL!
     PUSHR $fp       ; Calculating stack frame for "y0"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(2)    ; Calculating frame postion for "y0"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "y0" to stack
-    S.ADD
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "y0" to stack
+    ADD!
     PUSHR $fp       ; Calculating stack frame for "y"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(4)    ; Calculating frame postion for "y"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "y"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "y"
     PUSHR $fp       ; Calculating stack frame for "xtemp"
     PUSHC I32(1)    ; Calculating frame postion for "xtemp"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "xtemp" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "xtemp" to stack
     PUSHR $fp       ; Calculating stack frame for "x"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(3)    ; Calculating frame postion for "x"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "x"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "x"
     PUSHR $fp       ; Calculating stack frame for "iteration"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(5)    ; Calculating frame postion for "iteration"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "iteration" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "iteration" to stack
     PUSHC I32(1)
-    S.ADD
+    ADD!
     PUSHR $fp       ; Calculating stack frame for "iteration"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(5)    ; Calculating frame postion for "iteration"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "iteration"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "iteration"
     PUSHR $sp       ; Freeing 1 stack slots
     PUSHC I32(-1)   ; |
-    S.ADD           ; |
+    ADD!            ; |
     POPR $sp        ; ^
     POPR $fp        ; Poping local block frame
     POP
@@ -265,40 +265,40 @@ label_18:
 label_12:
     PUSHR $fp       ; Calculating stack frame for "px"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(1)    ; Calculating frame postion for "px"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "px" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "px" to stack
     PUSHC I32(1)
-    S.ADD
+    ADD!
     PUSHR $fp       ; Calculating stack frame for "px"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(1)    ; Calculating frame postion for "px"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "px"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "px"
     PUSHR $fp       ; Calculating stack frame for "iteration"
     PUSHC I32(5)    ; Calculating frame postion for "iteration"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "iteration" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "iteration" to stack
     PUSHC I32(130)
-    S.LT
-    S.BRANCHON Bool(False) label_30
+    LT!
+    BRANCHON Bool(False) ! label_30
 label_23:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
     PUSHR $sp
     POPR $fp
     PUSHC Char(' ')
-    S.PRINT
+    PRINT!
     POPR $fp        ; Poping local block frame
     POP
     JUMP label_28
@@ -308,13 +308,13 @@ label_30:
     PUSHR $sp
     POPR $fp
     PUSHC Char('o')
-    S.PRINT
+    PRINT!
     POPR $fp        ; Poping local block frame
     POP
 label_28:
     PUSHR $sp       ; Freeing 6 stack slots
     PUSHC I32(-6)   ; |
-    S.ADD           ; |
+    ADD!            ; |
     POPR $sp        ; ^
     POPR $fp        ; Poping local block frame
     POP
@@ -323,36 +323,36 @@ label_4:
     PUSHC I32(0)
     PUSHR $fp       ; Calculating stack frame for "px"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(1)    ; Calculating frame postion for "px"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "px"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "px"
     PUSHR $fp       ; Calculating stack frame for "py"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(2)    ; Calculating frame postion for "py"
-    S.ADD           ; 
-    S.LOADFROM      ; Push value of variable "py" to stack
+    ADD!            ; 
+    LOADFROM!       ; Push value of variable "py" to stack
     PUSHC I32(1)
-    S.ADD
+    ADD!
     PUSHR $fp       ; Calculating stack frame for "py"
     PUSHC I32(-1)   ; `-| chasing static link pointer
-    S.ADD           ;   |
-    S.LOADFROM      ;   |
+    ADD!            ;   |
+    LOADFROM!       ;   |
     PUSHC I32(2)    ; Calculating frame postion for "py"
-    S.ADD           ; 
-    S.STORETO       ; Storing stack value to variable "py"
+    ADD!            ; 
+    STORETO!        ; Storing stack value to variable "py"
     PUSHC Char('\n')
-    S.PRINT
+    PRINT!
     POPR $fp        ; Poping local block frame
     POP
     JUMP label_3
 label_2:
     PUSHR $sp       ; Freeing 2 stack slots
     PUSHC I32(-2)   ; |
-    S.ADD           ; |
+    ADD!            ; |
     POPR $sp        ; ^
     EXIT            ; Ending program execution
 
