@@ -360,6 +360,8 @@ pub enum Instruction {
 
     JUMP(Target),
     DJUMP(Source),
+    BRANCHEQ(Source, Source, Target),
+    BRANCHNE(Source, Source, Target),
     BRANCHON(Value, Target, Source),
 
     PRINT(Source),

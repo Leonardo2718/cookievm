@@ -217,6 +217,14 @@ impl Interpreter {
                 let src_val = self.get_value(src)?;
                 expect_value!(src_val, IPtr, InterpreterError::AttemptedJumpToNonIPtr(src_val))?
             },
+            BRANCHEQ(src1, src2, symbol) => {
+                let (val1, val2) = self.get_values(src1, src2)?;
+                if val1 == val2 { self.get_target_addr(&symbol)? } else {self.pc + 1 }
+            },
+            BRANCHNE(src1, src2, symbol) => {
+                let (val1, val2) = self.get_values(src1, src2)?;
+                if val1 != val2 { self.get_target_addr(&symbol)? } else {self.pc + 1 }
+            },
             BRANCHON(imm, symbol, src) => {
                 let val = cookie::BinaryOp::EQ.apply_to(imm, self.get_value(src)?)?;
                 let condition = expect_value!(val, Bool, InterpreterError::TypeMismatchError(cookie::Type::Bool, val))?;
