@@ -36,10 +36,16 @@ use std::convert;
 
 #[derive(Debug,Clone)]
 pub enum ParserError<'a> {
-    UnexpectedToken,
-    UnexpectedIdentifier,
+    UnexpectedToken(Token),
+    UnexpectedIdentifier(String),
     ExpectingMoreTokens,
     LexerError(lexer::Error<'a>)
+}
+
+#[derive(Debug,Clone)]
+pub struct Error<'a> {
+    pub error: ParserError<'a>,
+    pub position: Position<'a>,
 }
 
 impl<'a> fmt::Display for ParserError<'a> {
@@ -52,8 +58,8 @@ impl<'a> error::Error for ParserError<'a> {
     fn description(&self) -> &str {
         use self::ParserError::*;
         match self {
-            &UnexpectedToken => "Found an unexpected token while parsing",
-            &UnexpectedIdentifier => "Found an unexpected identifier while parsing",
+            &UnexpectedToken(_) => "Found an unexpected token while parsing",
+            &UnexpectedIdentifier(_) => "Found an unexpected identifier while parsing",
             &ExpectingMoreTokens => "Expecting more tokens but token stream ended",
             LexerError(_) => "Lexing error occured while parsing (see cause)"
         }
@@ -67,9 +73,15 @@ impl<'a> error::Error for ParserError<'a> {
     }
 }
 
-impl<'a> convert::From<lexer::Error<'a>> for ParserError<'a> {
-    fn from<'b>(error: lexer::Error<'b>) -> ParserError<'b> {
-        ParserError::LexerError(error)
+impl<'a> convert::From<ParserError<'a>> for Error<'a> {
+    fn from<'b>(error: ParserError<'b>) -> Error<'b> {
+        Error{error, position: Position{source: "", position: 0, line: 0, column: 0}}
+    }
+}
+
+impl<'a> convert::From<lexer::Error<'a>> for Error<'a> {
+    fn from<'b>(error: lexer::Error<'b>) -> Error<'b> {
+        Error{error: ParserError::LexerError(error), position: Position{source: "", position: 0, line: 0, column: 0}}
     }
 }
 
@@ -79,10 +91,10 @@ impl<'a> convert::From<ParserError<'a>> for String {
     }
 }
 
-type Result<'a, T> = result::Result<T, ParserError<'a>>;
+type Result<'a, T> = result::Result<T, Error<'a>>;
 
-macro_rules! unexpected_token ( ($t:expr)  => (Err(ParserError::UnexpectedToken)) );
-macro_rules! unexpected_id    ( ($id:expr) => (Err(ParserError::UnexpectedIdentifier)) );
+macro_rules! unexpected_token ( ($t:expr)  => ( Err(Error{error: ParserError::UnexpectedToken($t.token), position:$t.pos})) );
+macro_rules! unexpected_id    ( ($id:expr,$p:expr) => ( Err(Error{error: ParserError::UnexpectedIdentifier($id), position: $p})) );
 
 macro_rules! eat_token_ {
     ($iter:expr, $expect:tt) => ({
@@ -114,7 +126,8 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
         })
     );
 
-    match lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+    let t = lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    match t.token {
         Token::Void => Ok(Value::Void),
         Token::Ident(id) => match id.to_lowercase().as_ref() {
             "i32" => parse_as!(Integer, I32),
@@ -123,19 +136,21 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
             "bool" => parse_as!(Bool, Bool),
             "iptr" => parse_as!(Address, IPtr),
             "sptr" => parse_as!(Address, SPtr),
-            _id => return unexpected_id!(_id)
+            _id => return unexpected_id!(_id.to_string(), t.pos)
         },
-        _t => return unexpected_token!(_t),
+        _ => return unexpected_token!(t),
     }
 }
 
 fn parse_register<'a>(lexer: &mut Lexer<'a>) -> Result<'a, RegisterName> {
-    match lexer.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+    let t = lexer.next().clone();
+    let t = t.transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    match t.token {
         Token::SP => Ok(RegisterName::StackPointer),
         Token::FP => Ok(RegisterName::FramePointer),
         Token::PC => Ok(RegisterName::ProgramCounter),
         Token::R(i) => Ok(RegisterName::R(i)),
-        _t => unexpected_token!(_t),
+        _ => unexpected_token!(t),
     }
 }
 
@@ -153,7 +168,8 @@ fn parse_source<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
         ($reg:expr) => (Ok(Source::Register($reg)))
     );
 
-    match lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+    let t = lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    match t.token {
         Token::Void => Ok(Source::Immediate(Value::Void)),
         Token::Ident(id) => match id.to_lowercase().as_ref() {
             "i32" => parse_as_value!(Integer, I32),
@@ -162,14 +178,14 @@ fn parse_source<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
             "bool" => parse_as_value!(Bool, Bool),
             "iptr" => parse_as_value!(Address, IPtr),
             "sptr" => parse_as_value!(Address, SPtr),
-            _id => return unexpected_id!(_id)
+            id => return unexpected_id!(id.to_string(), t.pos)
         },
         Token::SP => parse_as_register!(RegisterName::StackPointer),
         Token::FP => parse_as_register!(RegisterName::FramePointer),
         Token::PC => parse_as_register!(RegisterName::ProgramCounter),
         Token::R(i) => parse_as_register!(RegisterName::R(i)),
         Token::StackPos(p) => Ok(Source::Stack(p)),
-        _t => return unexpected_token!(_t),
+        _ => return unexpected_token!(t),
     }
 }
 
@@ -178,18 +194,20 @@ fn parse_destination<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Destination> {
         ($reg:expr) => (Ok(Destination::Register($reg)))
     );
 
-    match lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+    let t = lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    match t.token {
         Token::SP => parse_as_register!(RegisterName::StackPointer),
         Token::FP => parse_as_register!(RegisterName::FramePointer),
         Token::PC => parse_as_register!(RegisterName::ProgramCounter),
         Token::R(i) => parse_as_register!(RegisterName::R(i)),
         Token::StackPos(p) => Ok(Destination::Stack(p)),
-        _t => return unexpected_token!(_t),
+        _ => return unexpected_token!(t),
     }
 }
 
 fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
-    match lexer.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?.token {
+    let t = lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    match t.token {
         Token::Void => Ok(Type::Void),
         Token::Ident(id) => match id.to_lowercase().as_ref() {
             "i32" => Ok(Type::I32),
@@ -198,9 +216,9 @@ fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
             "bool" => Ok(Type::Bool),
             "iptr" => Ok(Type::IPtr),
             "sptr" => Ok(Type::SPtr),
-            _id => return unexpected_id!(_id),
+            id => return unexpected_id!(id.to_string(), t.pos),
         }
-        _t => return unexpected_token!(_t),
+        _ => return unexpected_token!(t),
     }
 }
 
@@ -296,7 +314,8 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
     }
 
     loop {
-        match lexer.next().transpose()?.map(|t| t.token) {
+        let t = lexer.next().transpose()?;
+        match t.clone().map(|t| t.token) {
             Some(Token::Ident(id)) => match id.to_lowercase().as_ref() {
                 "add" => push_bop!(ADD),
                 "sub" => push_bop!(SUB),
@@ -323,8 +342,8 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                     insts.push(LOADFROM(dest, src));
                 },
                 "storeto" => {
-                    let (dest, src) = parse_ss(&mut lexer)?;
-                    insts.push(STORETO(dest, src));
+                    let (src1, src2) = parse_ss(&mut lexer)?;
+                    insts.push(STORETO(src1, src2));
                 },
                 "djump" => {
                     let src = parse_source(&mut lexer)?;
@@ -332,17 +351,17 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 },
                 "branchon" => {
                     let v = parse_value(&mut lexer)?;
-                    let src = parse_source(&mut lexer)?;
+                    let src = parse_s(&mut lexer)?;
                     let l = eat_token!(lexer, Ident)?;
                     insts.push(BRANCHON(v, UnresolvedSymbol(l), src));
                 },
                 "print" => {
-                    let src = parse_source(&mut lexer)?;
+                    let src = parse_s(&mut lexer)?;
                     insts.push(PRINT(src));
                 },
                 "read" => {
                     let t = parse_type(&mut lexer)?;
-                    let dest = parse_destination(&mut lexer)?;
+                    let dest = parse_d(&mut lexer)?;
                     insts.push(READ(t, dest));
                 },
                 "pushc" => {
@@ -360,10 +379,10 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "pop" => { insts.push(POP); },
                 "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(UnresolvedSymbol(l))); },
                 "exit" => { insts.push(EXIT); }
-                _ => return unexpected_id!(id)
+                id => return unexpected_id!(id.to_string(), t.unwrap().pos)
             },
             Some(Token::Label(l)) => { symbols.insert(l.to_string(), insts.len()); },
-            Some(_t) => return unexpected_token!(_t),
+            Some(_) => return unexpected_token!(t.clone().unwrap()),
             None => break,
         };
     }
