@@ -42,6 +42,7 @@ pub enum InterpreterError {
     BadInputType(cookie::Type),
     BadSource(cookie::Source),
     BadSourceCombination(cookie::Source,cookie::Source),
+    Bad3SourceCombination(cookie::Source,cookie::Source,cookie::Source),
     BadDestination(cookie::Destination),
     StackUnderflow,
     StackOverflow,
@@ -71,6 +72,7 @@ impl error::Error for InterpreterError {
             &BadInputType(_) => "Cannot read input of given type",
             &BadSource(_) => "Specified source operand is invalid",
             &BadSourceCombination(_,_) => "Specified source operands are invalid",
+            &Bad3SourceCombination(_,_,_) => "Specified source operands are invalid",
             &BadDestination(_) => "Specified result destination is invalid",
             &StackUnderflow => "Attempted to pop value but stack is empty",
             &StackOverflow => "Attempted to push value but stack is full",
@@ -227,6 +229,15 @@ impl Interpreter {
                 let (val1, val2) = self.get_values(src1, src2)?;
                 if cmp.apply_to(val1, val2)? { self.get_target_addr(&symbol)? } else {self.pc + 1 }
             },
+            DBRANCH(cmp, src1, src2, src3) => {
+                let (val1, val2, val3) = self.get3_values(src1, src2, src3)?;
+                if cmp.apply_to(val1, val2)? { 
+                    expect_value!(val3, IPtr, InterpreterError::AttemptedJumpToNonIPtr(val3))? 
+                }
+                else {
+                    self.pc + 1
+                }
+            },
             BRANCHON(imm, symbol, src) => {
                 let condition = cookie::CompareOp::SEQ.apply_to(imm, self.get_value(src)?)?;
                 if condition { self.get_target_addr(&symbol)? } else { self.pc + 1 }
@@ -291,6 +302,33 @@ impl Interpreter {
         let val = self.pop()?;
         self.register_put(reg, val)?;
         Ok(())
+    }
+    
+    fn get3_values(&mut self, src1: cookie::Source, src2: cookie::Source, src3: cookie::Source) -> Result<(cookie::Value, cookie::Value, cookie::Value)> {
+        use self::cookie::Source::*;
+        match (src1, src2, src3) {
+            (Register(r1), Register(r2), Register(r3)) => { Ok((self.register_get(r1)?, self.register_get(r2)?, self.register_get(r3)?)) }
+            (Register(r1), Register(r2), Immediate(i3)) => { Ok((self.register_get(r1)?, self.register_get(r2)?, i3)) }
+            (Register(r1), Immediate(i2), Register(r3)) => { Ok((self.register_get(r1)?, i2, self.register_get(r3)?)) }
+            (Register(r1), Immediate(i2), Immediate(i3)) => { Ok((self.register_get(r1)?, i2, i3)) }
+            (Immediate(i1), Register(r2), Register(r3)) => { Ok((i1, self.register_get(r2)?, self.register_get(r3)?)) }
+            (Immediate(i1), Register(r2), Immediate(i3)) => { Ok((i1, self.register_get(r2)?, i3)) }
+            (Immediate(i1), Immediate(i2), Register(r3)) => { Ok((i1, i2, self.register_get(r3)?)) }
+            (Immediate(i1), Immediate(i2), Immediate(i3)) => { Ok((i1, i2, i3)) }
+            (Stack(2), Stack(1), Stack(0)) => { 
+                let v2 = self.pop()?;
+                let v1 = self.pop()?; 
+                let v0 = self.pop()?; 
+                Ok((v0,v1,v2))
+            }
+            (Stack(0), Stack(1), Stack(2)) => {
+                let v0 = self.pop()?;
+                let v1 = self.pop()?; 
+                let v2 = self.pop()?; 
+                Ok((v0,v1,v2))
+            }
+            (s0, s1, s2) => Err(InterpreterError::Bad3SourceCombination(s0,s1,s2))
+        }
     }
     
     fn get_values(&mut self, srcl: cookie::Source, srcr: cookie::Source) -> Result<(cookie::Value, cookie::Value)> {

@@ -262,6 +262,21 @@ fn parse_ss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Source, Source)> {
     }
 }
 
+fn parse_sss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Source, Source, Source)> {
+    let mut peekable = lexer.clone().peekable();
+    let peeked = peekable.peek().ok_or(ParserError::ExpectingMoreTokens)?;
+    match peeked.clone()?.token {
+        Token::ExclamationMark => { lexer.next(); Ok((Source::Stack(2), Source::Stack(1), Source::Stack(0))) },
+        Token::QuestionMark => { lexer.next(); Ok((Source::Stack(0), Source::Stack(1), Source::Stack(2))) },
+        _ => {
+            let src1 = parse_source(lexer)?;
+            let src2 = parse_source(lexer)?;
+            let src3 = parse_source(lexer)?;
+            Ok((src1, src2, src3))
+        }
+    }
+}
+
 fn parse_ds<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source)> {
     let mut peekable = lexer.clone().peekable();
     let peeked = peekable.peek().ok_or(ParserError::ExpectingMoreTokens)?;
@@ -370,6 +385,19 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                     let (src1, src2) = parse_ss(&mut lexer)?;
                     let l = eat_token!(lexer, Ident)?;
                     insts.push(BRANCH(cmp ,src1, src2, UnresolvedSymbol(l)));
+                },
+                "dbranch" => {
+                    eat_token_!(lexer, Dot)?;
+                    let cmp = match eat_token!(lexer, Ident)?.to_lowercase().as_ref() {
+                        "eq" => EQ,
+                        "lt" => LT,
+                        "le" => LE,
+                        "gt" => GT,
+                        "ge" => GE,
+                        id => return unexpected_id!(id.to_string(), t.unwrap().pos)
+                    };
+                    let (src1, src2, src3) = parse_sss(&mut lexer)?;
+                    insts.push(DBRANCH(cmp ,src1, src2, src3));
                 },
                 "branchon" => {
                     let v = parse_value(&mut lexer)?;

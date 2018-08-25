@@ -529,6 +529,38 @@ mod test {
     }
 
     #[test]
+    fn dbranch_test_1() {
+        let insts = vec![
+            PUSHC(Value::Bool(true)),
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::IPtr(7)),
+            DBRANCH(CompareOp::EQ, Source::Stack(2), Source::Stack(1), Source::Stack(0)),
+            POP,
+            PUSHC(Value::Bool(false)),
+            EXIT,
+        ];
+        let mut thread = Thread::new(insts);
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn dbranch_test_2() {
+        let insts = vec![
+            PUSHC(Value::Bool(false)),
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::I32(1)),
+            PUSHC(Value::IPtr(7)),
+            DBRANCH(CompareOp::NE, Source::Stack(2), Source::Stack(1), Source::Stack(0)),
+            POP,
+            PUSHC(Value::Bool(true)),
+            EXIT,
+        ];
+        let mut thread = Thread::new(insts);
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::Bool(true));
+    }
+
+    #[test]
     fn branchon_test_1() {
         let insts = vec![
             PUSHC(Value::I32(1)),

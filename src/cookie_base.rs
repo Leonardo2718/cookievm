@@ -385,6 +385,7 @@ pub enum Instruction {
     JUMP(Target),
     DJUMP(Source),
     BRANCH(CompareOp, Source, Source, Target),
+    DBRANCH(CompareOp, Source, Source, Source),
     BRANCHON(Value, Target, Source),
 
     PRINT(Source),
