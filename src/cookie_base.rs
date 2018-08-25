@@ -384,8 +384,7 @@ pub enum Instruction {
 
     JUMP(Target),
     DJUMP(Source),
-    BRANCHEQ(Source, Source, Target),
-    BRANCHNE(Source, Source, Target),
+    BRANCH(CompareOp, Source, Source, Target),
     BRANCHON(Value, Target, Source),
 
     PRINT(Source),
@@ -405,6 +404,10 @@ fn resolve_symbol(inst: &Instruction, symbols: &SymbolTable) -> Instruction {
     match inst {
         JUMP(UnresolvedSymbol(l)) => { 
             if let Some(n) = symbols.get(&l.to_string()) { JUMP(LocalSymbol(*n, l.to_string())) } 
+            else { inst.clone() }
+        }
+        BRANCH(cmp, lhs, rhs, UnresolvedSymbol(l)) => {
+            if let Some(n) = symbols.get(&l.to_string()) { BRANCH(cmp.clone(), *lhs, *rhs, LocalSymbol(*n, l.to_string())) }
             else { inst.clone() }
         }
         BRANCHON(v, UnresolvedSymbol(l), c) => {
@@ -1238,7 +1241,7 @@ mod test {
     }
 
     #[test]
-    fn Seq_test_1() {
+    fn seq_test_1() {
         let lhs = Value::I32(4);
         let rhs = Value::I32(4);
         assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), true);
@@ -1532,7 +1535,7 @@ mod test {
     }
 
     #[test]
-    fn Sne_test_1() {
+    fn sne_test_1() {
         let lhs = Value::I32(4);
         let rhs = Value::I32(4);
         assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), false);

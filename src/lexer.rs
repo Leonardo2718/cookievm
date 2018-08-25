@@ -111,6 +111,7 @@ pub enum Token {
     RParen,
     ExclamationMark,
     QuestionMark,
+    Dot,
 }
 
 impl fmt::Display for Token {
@@ -371,6 +372,7 @@ impl<'a> Iterator for Lexer<'a> {
                 Some(')') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::RParen)); }
                 Some('!') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::ExclamationMark)); }
                 Some('?') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::QuestionMark)); }
+                Some('.') => { lexer_try!(self.move_and_set_pos()); return Some(self.emit(Token::Dot)); }
                 Some(';') => { eat_while!(self, |c| c != '\n', |_| ()); self.next_char(); continue; }
                 Some('-') => { lexer_try!(self.move_and_set_pos()); let r = self.match_negative(); return Some(r); }
                 Some(c) if c.is_whitespace() => { lexer_try!(self.move_and_set_pos()); continue; }
@@ -697,6 +699,22 @@ mod test{
         let mut lexer = Lexer::new("Sub ?");
         assert_next_is!(lexer, Ident("Sub".to_string()), 1, 1, 1);
         assert_next_is!(lexer, QuestionMark, 5, 1, 5);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_37() {
+        let mut lexer = Lexer::new(".");
+        assert_next_is!(lexer, Dot, 1, 1, 1);
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn lexer_test_38() {
+        let mut lexer = Lexer::new("BRANCH . eq");
+        assert_next_is!(lexer, Ident("BRANCH".to_string()), 1, 1, 1);
+        assert_next_is!(lexer, Dot, 8, 1, 8);
+        assert_next_is!(lexer, Ident("eq".to_string()), 10, 1, 10);
         assert!(lexer.next().is_none());
     }
 }

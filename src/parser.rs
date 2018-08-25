@@ -330,16 +330,16 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "mul" => push_bop!(MUL),
                 "div" => push_bop!(DIV),
                 "mod" => push_bop!(MOD),
-                "eq" => push_comp!(EQ),
-                "lt" => push_comp!(LT),
-                "le" => push_comp!(LE),
-                "gt" => push_comp!(GT),
-                "ge" => push_comp!(GE),
                 "and" => push_bop!(AND),
                 "or" => push_bop!(OR),
                 "xor" => push_bop!(XOR),
                 "neg" => push_uop!(NEG),
                 "not" => push_uop!(NOT),
+                "eq" => push_comp!(EQ),
+                "lt" => push_comp!(LT),
+                "le" => push_comp!(LE),
+                "gt" => push_comp!(GT),
+                "ge" => push_comp!(GE),
                 "cvt" => {
                     let t = parse_type(&mut lexer)?;
                     let (dest, src) = parse_ds(&mut lexer)?;
@@ -357,15 +357,19 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                     let src = parse_source(&mut lexer)?;
                     insts.push(DJUMP(src));
                 },
-                "brancheq" => {
+                "branch" => {
+                    eat_token_!(lexer, Dot)?;
+                    let cmp = match eat_token!(lexer, Ident)?.to_lowercase().as_ref() {
+                        "eq" => EQ,
+                        "lt" => LT,
+                        "le" => LE,
+                        "gt" => GT,
+                        "ge" => GE,
+                        id => return unexpected_id!(id.to_string(), t.unwrap().pos)
+                    };
                     let (src1, src2) = parse_ss(&mut lexer)?;
                     let l = eat_token!(lexer, Ident)?;
-                    insts.push(BRANCHEQ(src1, src2, UnresolvedSymbol(l)));
-                },
-                "branchne" => {
-                    let (src1, src2) = parse_ss(&mut lexer)?;
-                    let l = eat_token!(lexer, Ident)?;
-                    insts.push(BRANCHNE(src1, src2, UnresolvedSymbol(l)));
+                    insts.push(BRANCH(cmp ,src1, src2, UnresolvedSymbol(l)));
                 },
                 "branchon" => {
                     let v = parse_value(&mut lexer)?;
