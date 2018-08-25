@@ -294,6 +294,7 @@ fn parse_dss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source, Sour
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
     use cookie_base::Instruction::*;
     use cookie_base::BinaryOp::*;
+    use cookie_base::CompareOp::*;
     use cookie_base::UnaryOp::*;
     use cookie_base::Target::*;
     let mut insts: Vec<Instruction> = Vec::new();
@@ -304,6 +305,13 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
             let (dest, src1, src2) = parse_dss(&mut lexer)?;
             insts.push(BOp($op, dest, src1, src2));
         })
+    }
+
+    macro_rules! push_comp {
+        ($op:ident) => ({
+            let (dest, src1, src2) = parse_dss(&mut lexer)?;
+            insts.push(Compare($op, dest, src1, src2));
+        });
     }
 
     macro_rules! push_uop {
@@ -322,11 +330,11 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "mul" => push_bop!(MUL),
                 "div" => push_bop!(DIV),
                 "mod" => push_bop!(MOD),
-                "eq" => push_bop!(EQ),
-                "lt" => push_bop!(LT),
-                "le" => push_bop!(LE),
-                "gt" => push_bop!(GT),
-                "ge" => push_bop!(GE),
+                "eq" => push_comp!(EQ),
+                "lt" => push_comp!(LT),
+                "le" => push_comp!(LE),
+                "gt" => push_comp!(GT),
+                "ge" => push_comp!(GE),
                 "and" => push_bop!(AND),
                 "or" => push_bop!(OR),
                 "xor" => push_bop!(XOR),
@@ -422,7 +430,7 @@ mod test {
     fn parse_dss_test_2() {
         let insts = parse(Lexer::new("EQ @0 @1 @0")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::BOp(BinaryOp::EQ,
+        assert_eq!(insts[0], Instruction::Compare(CompareOp::EQ,
                                           Destination::Stack(0), 
                                           Source::Stack(1), 
                                           Source::Stack(0)));

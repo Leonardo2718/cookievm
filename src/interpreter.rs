@@ -212,6 +212,12 @@ impl Interpreter {
                 self.put_value(dest, res)?;
                 self.pc + 1
             },
+            Compare(op, dest, lhs, rhs) => {
+                let (lhs_v, rhs_v) = self.get_values(lhs, rhs)?;
+                let res = op.apply_to(lhs_v, rhs_v)?;
+                self.put_value(dest, cookie::Value::Bool(res))?;
+                self.pc + 1
+            }
             JUMP(symbol) => { self.get_target_addr(&symbol)? },
             DJUMP(src) => {
                 let src_val = self.get_value(src)?;
@@ -226,8 +232,7 @@ impl Interpreter {
                 if val1 != val2 { self.get_target_addr(&symbol)? } else {self.pc + 1 }
             },
             BRANCHON(imm, symbol, src) => {
-                let val = cookie::BinaryOp::EQ.apply_to(imm, self.get_value(src)?)?;
-                let condition = expect_value!(val, Bool, InterpreterError::TypeMismatchError(cookie::Type::Bool, val))?;
+                let condition = cookie::CompareOp::SEQ.apply_to(imm, self.get_value(src)?)?;
                 if condition { self.get_target_addr(&symbol)? } else { self.pc + 1 }
             },
             PRINT(src) => {
