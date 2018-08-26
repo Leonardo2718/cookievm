@@ -238,10 +238,6 @@ impl Interpreter {
                     self.pc + 1
                 }
             },
-            BRANCHON(imm, symbol, src) => {
-                let condition = cookie::CompareOp::SEQ.apply_to(imm, self.get_value(src)?)?;
-                if condition { self.get_target_addr(&symbol)? } else { self.pc + 1 }
-            },
             PRINT(src) => {
                 use self::cookie::Value::*;
                 let s = match self.get_value(src)? {

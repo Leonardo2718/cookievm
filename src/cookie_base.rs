@@ -386,7 +386,6 @@ pub enum Instruction {
     DJUMP(Source),
     BRANCH(CompareOp, Source, Source, Target),
     DBRANCH(CompareOp, Source, Source, Source),
-    BRANCHON(Value, Target, Source),
 
     PRINT(Source),
     READ(Type, Destination),
@@ -409,10 +408,6 @@ fn resolve_symbol(inst: &Instruction, symbols: &SymbolTable) -> Instruction {
         }
         BRANCH(cmp, lhs, rhs, UnresolvedSymbol(l)) => {
             if let Some(n) = symbols.get(&l.to_string()) { BRANCH(cmp.clone(), *lhs, *rhs, LocalSymbol(*n, l.to_string())) }
-            else { inst.clone() }
-        }
-        BRANCHON(v, UnresolvedSymbol(l), c) => {
-            if let Some(n) = symbols.get(&l.to_string()) { BRANCHON(*v, LocalSymbol(*n, l.to_string()), *c) } 
             else { inst.clone() }
         }
         _ => inst.clone()

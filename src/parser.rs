@@ -399,12 +399,6 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                     let (src1, src2, src3) = parse_sss(&mut lexer)?;
                     insts.push(DBRANCH(cmp ,src1, src2, src3));
                 },
-                "branchon" => {
-                    let v = parse_value(&mut lexer)?;
-                    let src = parse_s(&mut lexer)?;
-                    let l = eat_token!(lexer, Ident)?;
-                    insts.push(BRANCHON(v, UnresolvedSymbol(l), src));
-                },
                 "print" => {
                     let src = parse_s(&mut lexer)?;
                     insts.push(PRINT(src));

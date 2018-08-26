@@ -561,54 +561,6 @@ mod test {
     }
 
     #[test]
-    fn branchon_test_1() {
-        let insts = vec![
-            PUSHC(Value::I32(1)),
-            PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(true), LocalSymbol(5, "symbol".to_string()), Source::Stack(0)),
-            POP,
-            PUSHC(Value::Void),
-            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
-        ];
-        let mut symbols: SymbolTable = HashMap::new();
-        symbols.insert("symbol".to_string(), 5);
-        let mut thread = Thread::new(insts);
-        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(-1));
-    }
-
-    #[test]
-    fn branchon_test_2() {
-        let insts = vec![
-            PUSHC(Value::Void),
-            PUSHC(Value::Bool(true)),
-            BRANCHON(Value::Bool(false), LocalSymbol(5, "symbol".to_string()), Source::Stack(0)),
-            POP,
-            PUSHC(Value::I32(-1)),
-            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
-        ];
-        let mut symbols: SymbolTable = HashMap::new();
-        symbols.insert("symbol".to_string(), 5);
-        let mut thread = Thread::new(insts);
-        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(1));
-    }
-
-    #[test]
-    fn branchon_test_3() {
-        let insts = vec![
-            PUSHC(Value::Void),
-            PUSHC(Value::Bool(true)),
-            BRANCHON(Value::I32(1), LocalSymbol(5, "symbol".to_string()), Source::Stack(0)),
-            POP,
-            PUSHC(Value::I32(-1)),
-            UOp(UnaryOp::NEG, Destination::Stack(0), Source::Stack(0)),
-        ];
-        let mut symbols: SymbolTable = HashMap::new();
-        symbols.insert("symbol".to_string(), 5);
-        let mut thread = Thread::new(insts);
-        assert!(thread.exec().is_err());
-    }
-
-    #[test]
     fn loadfrom_test_1() {
         let insts = vec![
             PUSHC(Value::I32(2)),
