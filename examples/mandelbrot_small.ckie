@@ -21,7 +21,8 @@ label_3:
     LOADFROM!       ; Push value of variable "py" to stack
     PUSHC I32(40)
     LT!
-    BRANCHON Bool(False) ! label_2
+    PUSHC Bool(False)
+    BRANCH.EQ! label_2
 label_38:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -37,7 +38,8 @@ label_5:
     LOADFROM!       ; Push value of variable "px" to stack
     PUSHC I32(80)
     LT!
-    BRANCHON Bool(False) ! label_4
+    PUSHC Bool(False)
+    BRANCH.EQ! label_4
 label_32:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -143,7 +145,8 @@ label_13:
     LOADFROM!       ; Push value of variable "max" to stack
     LT!
     AND!
-    BRANCHON Bool(False) ! label_12
+    PUSHC Bool(False)
+    BRANCH.EQ! label_12
 label_18:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -291,7 +294,8 @@ label_12:
     LOADFROM!       ; Push value of variable "iteration" to stack
     PUSHC I32(130)
     LT!
-    BRANCHON Bool(False) ! label_30
+    PUSHC Bool(False)
+    BRANCH.EQ! label_30
 label_23:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
