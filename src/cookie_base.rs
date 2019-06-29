@@ -401,15 +401,12 @@ pub type SymbolTable = HashMap<String, usize>;
 fn resolve_symbol(inst: &Instruction, symbols: &SymbolTable) -> Instruction {
     use cookie_base::Instruction::*;
     use cookie_base::Target::*;
+
+    let resolver = |l: &str| if let Some(n) = symbols.get(&l.to_string()) { LocalSymbol(*n, l.to_string()) } else { UnresolvedSymbol(l.to_string()) };
+
     match inst {
-        JUMP(UnresolvedSymbol(l)) => { 
-            if let Some(n) = symbols.get(&l.to_string()) { JUMP(LocalSymbol(*n, l.to_string())) } 
-            else { inst.clone() }
-        }
-        BRANCH(cmp, lhs, rhs, UnresolvedSymbol(l)) => {
-            if let Some(n) = symbols.get(&l.to_string()) { BRANCH(cmp.clone(), *lhs, *rhs, LocalSymbol(*n, l.to_string())) }
-            else { inst.clone() }
-        }
+        JUMP(UnresolvedSymbol(l)) => JUMP(resolver(l)),
+        BRANCH(cmp, lhs, rhs, UnresolvedSymbol(l)) => BRANCH(cmp.clone(), *lhs, *rhs, resolver(l)),
         _ => inst.clone()
     }
 }
