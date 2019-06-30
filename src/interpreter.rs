@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2018 Leonardo Banderali
+Copyright (C) 2018, 2019 Leonardo Banderali
 
 License:
 
@@ -214,12 +214,6 @@ impl Interpreter {
                 self.put_value(dest, res)?;
                 self.pc + 1
             },
-            Compare(op, dest, lhs, rhs) => {
-                let (lhs_v, rhs_v) = self.get_values(lhs, rhs)?;
-                let res = op.apply_to(lhs_v, rhs_v)?;
-                self.put_value(dest, cookie::Value::Bool(res))?;
-                self.pc + 1
-            }
             JUMP(symbol) => { self.get_target_addr(&symbol)? },
             DJUMP(src) => {
                 let src_val = self.get_value(src)?;

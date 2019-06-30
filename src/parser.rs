@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2018 Leonardo Banderali
+Copyright (C) 2018, 2019 Leonardo Banderali
 
 License:
 
@@ -309,7 +309,7 @@ fn parse_dss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source, Sour
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
     use cookie_base::Instruction::*;
     use cookie_base::BinaryOp::*;
-    use cookie_base::CompareOp::*;
+    use cookie_base::CompareOp;
     use cookie_base::UnaryOp::*;
     use cookie_base::Target::*;
     let mut insts: Vec<Instruction> = Vec::new();
@@ -320,13 +320,6 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
             let (dest, src1, src2) = parse_dss(&mut lexer)?;
             insts.push(BOp($op, dest, src1, src2));
         })
-    }
-
-    macro_rules! push_comp {
-        ($op:ident) => ({
-            let (dest, src1, src2) = parse_dss(&mut lexer)?;
-            insts.push(Compare($op, dest, src1, src2));
-        });
     }
 
     macro_rules! push_uop {
@@ -347,14 +340,14 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "mod" => push_bop!(MOD),
                 "and" => push_bop!(AND),
                 "or" => push_bop!(OR),
+                "eq" => push_bop!(EQ),
+                "lt" => push_bop!(LT),
+                "le" => push_bop!(LE),
+                "gt" => push_bop!(GT),
+                "ge" => push_bop!(GE),
                 "xor" => push_bop!(XOR),
                 "neg" => push_uop!(NEG),
                 "not" => push_uop!(NOT),
-                "eq" => push_comp!(EQ),
-                "lt" => push_comp!(LT),
-                "le" => push_comp!(LE),
-                "gt" => push_comp!(GT),
-                "ge" => push_comp!(GE),
                 "cvt" => {
                     let t = parse_type(&mut lexer)?;
                     let (dest, src) = parse_ds(&mut lexer)?;
@@ -375,11 +368,11 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "branch" => {
                     eat_token_!(lexer, Dot)?;
                     let cmp = match eat_token!(lexer, Ident)?.to_lowercase().as_ref() {
-                        "eq" => EQ,
-                        "lt" => LT,
-                        "le" => LE,
-                        "gt" => GT,
-                        "ge" => GE,
+                        "eq" => CompareOp::EQ,
+                        "lt" => CompareOp::LT,
+                        "le" => CompareOp::LE,
+                        "gt" => CompareOp::GT,
+                        "ge" => CompareOp::GE,
                         id => return unexpected_id!(id.to_string(), t.unwrap().pos)
                     };
                     let (src1, src2) = parse_ss(&mut lexer)?;
@@ -389,11 +382,11 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "dbranch" => {
                     eat_token_!(lexer, Dot)?;
                     let cmp = match eat_token!(lexer, Ident)?.to_lowercase().as_ref() {
-                        "eq" => EQ,
-                        "lt" => LT,
-                        "le" => LE,
-                        "gt" => GT,
-                        "ge" => GE,
+                        "eq" => CompareOp::EQ,
+                        "lt" => CompareOp::LT,
+                        "le" => CompareOp::LE,
+                        "gt" => CompareOp::GT,
+                        "ge" => CompareOp::GE,
                         id => return unexpected_id!(id.to_string(), t.unwrap().pos)
                     };
                     let (src1, src2, src3) = parse_sss(&mut lexer)?;

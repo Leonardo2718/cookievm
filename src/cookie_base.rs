@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2018 Leonardo Banderali
+Copyright (C) 2018, 2019 Leonardo Banderali
 
 License:
 
@@ -225,8 +225,11 @@ impl fmt::Display for UnaryOp {
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum BinaryOp {
-    ADD, SUB, MUL, DIV, MOD,
-    AND, OR, XOR,
+    ADD, SUB, MUL, DIV, MOD, // arithmetic operations
+    AND, OR, XOR,   // boolean operations
+    EQ, NE,         // value equality (mismatched types results in false)
+    TEQ, TNE,       // type equality
+    LT, LE, GT, GE, // numeric comparison
 }
 
 fn ptr_add(lhs: usize, rhs:i32) -> usize {
@@ -253,6 +256,18 @@ impl BinaryOp {
                     $( (Value::$l(l), Value::$r(r)) => Ok(Value::$res($op(l,r))) ),+ ,
                     _ => apply_err
                 }
+            };
+        }
+
+        macro_rules! apply_using {
+            ($op:tt, $($t:ident), +) => {
+                match (lhs, rhs) {
+                    $( (Value::$t(l), Value::$t(r)) => Ok(Value::Bool($op(l,r))) ), +,
+                    _ => apply_err
+                }
+            };
+            ($res:expr) => {
+                Ok(Value::Bool($res))
             };
         }
 
@@ -293,6 +308,14 @@ impl BinaryOp {
                 Bool Bool => Bool : (|l,r| l != r),
                 I32 I32 => I32 : (|l,r| l ^ r),
             ],
+            BinaryOp::EQ => apply_using!(lhs == rhs),
+            BinaryOp::NE => apply_using!(lhs != rhs),
+            BinaryOp::TEQ => apply_using!(lhs.get_type() == rhs.get_type()),
+            BinaryOp::TNE => apply_using!(lhs.get_type() != rhs.get_type()),
+            BinaryOp::LT => apply_using!((|l,r| l < r), I32, F32, Char),
+            BinaryOp::LE => apply_using!((|l,r| l <= r), I32, F32, Char),
+            BinaryOp::GT => apply_using!((|l,r| l > r), I32, F32, Char),
+            BinaryOp::GE => apply_using!((|l,r| l >= r), I32, F32, Char),
         }
     }
 }
@@ -376,7 +399,6 @@ pub enum Instruction {
 
     UOp(UnaryOp, Destination, Source),
     BOp(BinaryOp, Destination, Source, Source),
-    Compare(CompareOp, Destination, Source, Source),
 
     JUMP(Target),
     DJUMP(Source),
