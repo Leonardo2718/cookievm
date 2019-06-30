@@ -309,7 +309,6 @@ fn parse_dss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source, Sour
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
     use cookie_base::Instruction::*;
     use cookie_base::BinaryOp::*;
-    use cookie_base::CompareOp;
     use cookie_base::UnaryOp::*;
     use cookie_base::Target::*;
     let mut insts: Vec<Instruction> = Vec::new();
@@ -366,31 +365,13 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                     insts.push(DJUMP(src));
                 },
                 "branch" => {
-                    eat_token_!(lexer, Dot)?;
-                    let cmp = match eat_token!(lexer, Ident)?.to_lowercase().as_ref() {
-                        "eq" => CompareOp::EQ,
-                        "lt" => CompareOp::LT,
-                        "le" => CompareOp::LE,
-                        "gt" => CompareOp::GT,
-                        "ge" => CompareOp::GE,
-                        id => return unexpected_id!(id.to_string(), t.unwrap().pos)
-                    };
-                    let (src1, src2) = parse_ss(&mut lexer)?;
+                    let src = parse_s(&mut lexer)?;
                     let l = eat_token!(lexer, Ident)?;
-                    insts.push(BRANCH(cmp ,src1, src2, UnresolvedSymbol(l)));
+                    insts.push(BRANCH(src, UnresolvedSymbol(l)));
                 },
                 "dbranch" => {
-                    eat_token_!(lexer, Dot)?;
-                    let cmp = match eat_token!(lexer, Ident)?.to_lowercase().as_ref() {
-                        "eq" => CompareOp::EQ,
-                        "lt" => CompareOp::LT,
-                        "le" => CompareOp::LE,
-                        "gt" => CompareOp::GT,
-                        "ge" => CompareOp::GE,
-                        id => return unexpected_id!(id.to_string(), t.unwrap().pos)
-                    };
-                    let (src1, src2, src3) = parse_sss(&mut lexer)?;
-                    insts.push(DBRANCH(cmp ,src1, src2, src3));
+                    let (src1, src2) = parse_ss(&mut lexer)?;
+                    insts.push(DBRANCH(src1, src2));
                 },
                 "print" => {
                     let src = parse_s(&mut lexer)?;
@@ -449,7 +430,7 @@ mod test {
     fn parse_dss_test_2() {
         let insts = parse(Lexer::new("EQ @0 @1 @0")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::Compare(CompareOp::EQ,
+        assert_eq!(insts[0], Instruction::BOp(BinaryOp::EQ,
                                           Destination::Stack(0), 
                                           Source::Stack(1), 
                                           Source::Stack(0)));

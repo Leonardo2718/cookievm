@@ -219,14 +219,16 @@ impl Interpreter {
                 let src_val = self.get_value(src)?;
                 expect_value!(src_val, IPtr, InterpreterError::AttemptedJumpToNonIPtr(src_val))?
             },
-            BRANCH(cmp, src1, src2, symbol) => {
-                let (val1, val2) = self.get_values(src1, src2)?;
-                if cmp.apply_to(val1, val2)? { self.get_target_addr(&symbol)? } else {self.pc + 1 }
+            BRANCH(src, symbol) => {
+                let val = self.get_value(src)?;
+                let condition = expect_value!(val, Bool, InterpreterError::TypeMismatchError(cookie::Type::Bool, val))?;
+                if condition { self.get_target_addr(&symbol)? } else { self.pc + 1 }
             },
-            DBRANCH(cmp, src1, src2, src3) => {
-                let (val1, val2, val3) = self.get3_values(src1, src2, src3)?;
-                if cmp.apply_to(val1, val2)? { 
-                    expect_value!(val3, IPtr, InterpreterError::AttemptedJumpToNonIPtr(val3))? 
+            DBRANCH(src1, src2) => {
+                let (val1, val2) = self.get_values(src1, src2)?;
+                let condition = expect_value!(val1, Bool, InterpreterError::TypeMismatchError(cookie::Type::Bool, val1))?;
+                if condition { 
+                    expect_value!(val2, IPtr, InterpreterError::AttemptedJumpToNonIPtr(val2))? 
                 }
                 else {
                     self.pc + 1

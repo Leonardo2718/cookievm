@@ -151,7 +151,6 @@ impl fmt::Display for RegisterName {
 #[derive(Debug,Clone,PartialEq)]
 pub enum OpApplicationError {
     BadBinaryOp(BinaryOp,Value,Value),
-    BadComparison(CompareOp,Value,Value),
     BadUnaryOp(UnaryOp,Value),
     BadConversion(ConversionError),
 }
@@ -167,7 +166,6 @@ impl error::Error for OpApplicationError {
         use self::OpApplicationError::*;
         match self {
             &BadBinaryOp(_,_,_) => "Cannot apply binary operation to given values (cannot operate on given types)",
-            &BadComparison(_,_,_) => "Cannot compare given values",
             &BadUnaryOp(_,_) => "Cannot apply unary operation to given value (unsupported type)",
             &BadConversion(_) => "Cannot convert source value to target type",
         }
@@ -320,51 +318,6 @@ impl BinaryOp {
     }
 }
 
-
-#[derive(Debug,Clone,PartialEq)]
-pub enum CompareOp {
-    EQ, NE,         // normal equality (mismatched types results in false)
-    SEQ, SNE,       // strict equality (mismatched types results in error)
-    TEQ, TNE,       // type equality
-    LT, LE, GT, GE, // numeric comparison
-}
-
-impl fmt::Display for CompareOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl CompareOp {
-    pub fn apply_to(&self, lhs: Value, rhs: Value) -> result::Result<bool, OpApplicationError> {
-        use self::CompareOp::*;
-
-        let err = Err(OpApplicationError::BadComparison(self.clone(), lhs, rhs));
-
-        macro_rules! apply_using {
-            ($op:tt, $($t:ident), +) => {
-                match (lhs, rhs) {
-                    $( (Value::$t(l), Value::$t(r)) => Ok($op(l,r)) ), +,
-                    _ => err
-                }
-            }
-        }
-
-        match self {
-            EQ => Ok(lhs == rhs),
-            NE => Ok(lhs != rhs),
-            SEQ => if lhs.get_type() == rhs.get_type() { Ok(lhs == rhs) } else { err },
-            SNE => if lhs.get_type() == rhs.get_type() { Ok(lhs != rhs) } else { err },
-            LT => apply_using!((|l,r| l < r), I32, F32, Char),
-            LE => apply_using!((|l,r| l <= r), I32, F32, Char),
-            GT => apply_using!((|l,r| l > r), I32, F32, Char),
-            GE => apply_using!((|l,r| l >= r), I32, F32, Char),
-            TEQ => Ok(lhs.get_type() == rhs.get_type()),
-            TNE => Ok(lhs.get_type() != rhs.get_type()),
-        }
-    }
-}
-
 // cookie instructions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(Debug,Clone,Copy,PartialEq)]
@@ -402,8 +355,8 @@ pub enum Instruction {
 
     JUMP(Target),
     DJUMP(Source),
-    BRANCH(CompareOp, Source, Source, Target),
-    DBRANCH(CompareOp, Source, Source, Source),
+    BRANCH(Source, Target),
+    DBRANCH(Source, Source),
 
     PRINT(Source),
     READ(Type, Destination),
@@ -424,7 +377,7 @@ fn resolve_symbol(inst: &Instruction, symbols: &SymbolTable) -> Instruction {
 
     match inst {
         JUMP(UnresolvedSymbol(l)) => JUMP(resolver(l)),
-        BRANCH(cmp, lhs, rhs, UnresolvedSymbol(l)) => BRANCH(cmp.clone(), *lhs, *rhs, resolver(l)),
+        BRANCH(val, UnresolvedSymbol(l)) => BRANCH(*val, resolver(l)),
         _ => inst.clone()
     }
 }
@@ -440,7 +393,6 @@ mod test {
     use super::*;
     use super::UnaryOp::*;
     use super::BinaryOp::*;
-    use super::CompareOp::*;
 
     #[test]
     fn neg_test_1() {
@@ -1108,651 +1060,357 @@ mod test {
     fn eq_test_1() {
         let lhs = Value::I32(4);
         let rhs = Value::I32(4);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn eq_test_2() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(2);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_3() {
         let lhs = Value::F32(6.47);
         let rhs = Value::F32(6.47);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn eq_test_4() {
         let lhs = Value::F32(3.14159);
         let rhs = Value::F32(2.71828);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_5() {
         let lhs = Value::Char('c');
         let rhs = Value::Char('c');
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn eq_test_6() {
         let lhs = Value::Char('x');
         let rhs = Value::Char('y');
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_7() {
         let lhs = Value::Bool(false);
         let rhs = Value::Bool(false);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn eq_test_8() {
         let lhs = Value::Bool(false);
         let rhs = Value::Bool(true);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_9() {
         let lhs = Value::IPtr(0x5);
         let rhs = Value::IPtr(0x5);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn eq_test_10() {
         let lhs = Value::IPtr(0x7);
         let rhs = Value::IPtr(0x4);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_11() {
         let lhs = Value::SPtr(0x5);
         let rhs = Value::SPtr(0x5);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn eq_test_12() {
         let lhs = Value::SPtr(0x7);
         let rhs = Value::SPtr(0x4);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_13() {
         let lhs = Value::I32(2);
         let rhs = Value::F32(2.0);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_14() {
         let lhs = Value::Char('c');
         let rhs = Value::I32(3);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_15() {
         let lhs = Value::I32(1);
         let rhs = Value::Bool(true);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_16() {
         let lhs = Value::IPtr(0xff);
         let rhs = Value::SPtr(0xff);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_17() {
         let lhs = Value::IPtr(0x3);
         let rhs = Value::I32(3);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_18() {
         let lhs = Value::I32(5);
         let rhs = Value::SPtr(0x5);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_19() {
         let lhs = Value::Void;
         let rhs = Value::I32(0);
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_20() {
         let lhs = Value::Char('e');
         let rhs = Value::Void;
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn eq_test_21() {
         let lhs = Value::Void;
         let rhs = Value::Void;
-        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn seq_test_1() {
-        let lhs = Value::I32(4);
-        let rhs = Value::I32(4);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn seq_test_2() {
-        let lhs = Value::I32(3);
-        let rhs = Value::I32(2);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn seq_test_3() {
-        let lhs = Value::F32(6.47);
-        let rhs = Value::F32(6.47);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn seq_test_4() {
-        let lhs = Value::F32(3.14159);
-        let rhs = Value::F32(2.71828);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn seq_test_5() {
-        let lhs = Value::Char('c');
-        let rhs = Value::Char('c');
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn seq_test_6() {
-        let lhs = Value::Char('x');
-        let rhs = Value::Char('y');
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn seq_test_7() {
-        let lhs = Value::Bool(false);
-        let rhs = Value::Bool(false);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn seq_test_8() {
-        let lhs = Value::Bool(false);
-        let rhs = Value::Bool(true);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn seq_test_9() {
-        let lhs = Value::IPtr(0x5);
-        let rhs = Value::IPtr(0x5);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn seq_test_10() {
-        let lhs = Value::IPtr(0x7);
-        let rhs = Value::IPtr(0x4);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn seq_test_11() {
-        let lhs = Value::SPtr(0x5);
-        let rhs = Value::SPtr(0x5);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn seq_test_12() {
-        let lhs = Value::SPtr(0x7);
-        let rhs = Value::SPtr(0x4);
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn seq_test_13() {
-        let lhs = Value::I32(2);
-        let rhs = Value::F32(2.0);
-        assert!(SEQ.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn seq_test_14() {
-        let lhs = Value::Char('c');
-        let rhs = Value::I32(3);
-        assert!(SEQ.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn seq_test_15() {
-        let lhs = Value::I32(1);
-        let rhs = Value::Bool(true);
-        assert!(SEQ.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn seq_test_16() {
-        let lhs = Value::IPtr(0xff);
-        let rhs = Value::SPtr(0xff);
-        assert!(SEQ.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn seq_test_17() {
-        let lhs = Value::IPtr(0x3);
-        let rhs = Value::I32(3);
-        assert!(SEQ.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn seq_test_18() {
-        let lhs = Value::I32(5);
-        let rhs = Value::SPtr(0x5);
-        assert!(SEQ.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn seq_test_19() {
-        let lhs = Value::Void;
-        let rhs = Value::I32(0);
-        assert!(SEQ.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn seq_test_20() {
-        let lhs = Value::Char('e');
-        let rhs = Value::Void;
-        assert!(SEQ.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn seq_test_21() {
-        let lhs = Value::Void;
-        let rhs = Value::Void;
-        assert_eq!(SEQ.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(EQ.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_1() {
         let lhs = Value::I32(4);
         let rhs = Value::I32(4);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ne_test_2() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(2);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_3() {
         let lhs = Value::F32(6.47);
         let rhs = Value::F32(6.47);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ne_test_4() {
         let lhs = Value::F32(3.14159);
         let rhs = Value::F32(2.71828);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_5() {
         let lhs = Value::Char('c');
         let rhs = Value::Char('c');
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ne_test_6() {
         let lhs = Value::Char('x');
         let rhs = Value::Char('y');
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_7() {
         let lhs = Value::Bool(false);
         let rhs = Value::Bool(false);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ne_test_8() {
         let lhs = Value::Bool(false);
         let rhs = Value::Bool(true);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_9() {
         let lhs = Value::IPtr(0x5);
         let rhs = Value::IPtr(0x5);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ne_test_10() {
         let lhs = Value::IPtr(0x7);
         let rhs = Value::IPtr(0x4);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_11() {
         let lhs = Value::SPtr(0x5);
         let rhs = Value::SPtr(0x5);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ne_test_12() {
         let lhs = Value::SPtr(0x7);
         let rhs = Value::SPtr(0x4);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_13() {
         let lhs = Value::I32(2);
         let rhs = Value::F32(2.0);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_14() {
         let lhs = Value::Char('c');
         let rhs = Value::I32(3);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_15() {
         let lhs = Value::I32(1);
         let rhs = Value::Bool(true);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_16() {
         let lhs = Value::IPtr(0xff);
         let rhs = Value::SPtr(0xff);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_17() {
         let lhs = Value::IPtr(0x3);
         let rhs = Value::I32(3);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_18() {
         let lhs = Value::I32(5);
         let rhs = Value::SPtr(0x5);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_19() {
         let lhs = Value::Void;
         let rhs = Value::I32(0);
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_20() {
         let lhs = Value::Char('e');
         let rhs = Value::Void;
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ne_test_21() {
         let lhs = Value::Void;
         let rhs = Value::Void;
-        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn sne_test_1() {
-        let lhs = Value::I32(4);
-        let rhs = Value::I32(4);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn sne_test_2() {
-        let lhs = Value::I32(3);
-        let rhs = Value::I32(2);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn sne_test_3() {
-        let lhs = Value::F32(6.47);
-        let rhs = Value::F32(6.47);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn sne_test_4() {
-        let lhs = Value::F32(3.14159);
-        let rhs = Value::F32(2.71828);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn sne_test_5() {
-        let lhs = Value::Char('c');
-        let rhs = Value::Char('c');
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn sne_test_6() {
-        let lhs = Value::Char('x');
-        let rhs = Value::Char('y');
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn sne_test_7() {
-        let lhs = Value::Bool(false);
-        let rhs = Value::Bool(false);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn sne_test_8() {
-        let lhs = Value::Bool(false);
-        let rhs = Value::Bool(true);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn sne_test_9() {
-        let lhs = Value::IPtr(0x5);
-        let rhs = Value::IPtr(0x5);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn sne_test_10() {
-        let lhs = Value::IPtr(0x7);
-        let rhs = Value::IPtr(0x4);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn sne_test_11() {
-        let lhs = Value::SPtr(0x5);
-        let rhs = Value::SPtr(0x5);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), false);
-    }
-
-    #[test]
-    fn sne_test_12() {
-        let lhs = Value::SPtr(0x7);
-        let rhs = Value::SPtr(0x4);
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), true);
-    }
-
-    #[test]
-    fn sne_test_13() {
-        let lhs = Value::I32(2);
-        let rhs = Value::F32(2.0);
-        assert!(SNE.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn sne_test_14() {
-        let lhs = Value::Char('c');
-        let rhs = Value::I32(3);
-        assert!(SNE.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn sne_test_15() {
-        let lhs = Value::I32(1);
-        let rhs = Value::Bool(true);
-        assert!(SNE.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn sne_test_16() {
-        let lhs = Value::IPtr(0xff);
-        let rhs = Value::SPtr(0xff);
-        assert!(SNE.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn sne_test_17() {
-        let lhs = Value::IPtr(0x3);
-        let rhs = Value::I32(3);
-        assert!(SNE.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn sne_test_18() {
-        let lhs = Value::I32(5);
-        let rhs = Value::SPtr(0x5);
-        assert!(SNE.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn sne_test_19() {
-        let lhs = Value::Void;
-        let rhs = Value::I32(0);
-        assert!(SNE.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn sne_test_20() {
-        let lhs = Value::Char('e');
-        let rhs = Value::Void;
-        assert!(SNE.apply_to(lhs, rhs).is_err());
-    }
-
-    #[test]
-    fn sne_test_21() {
-        let lhs = Value::Void;
-        let rhs = Value::Void;
-        assert_eq!(SNE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(NE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn lt_test_1() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(4);
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn lt_test_2() {
         let lhs = Value::I32(4);
         let rhs = Value::I32(3);
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn lt_test_3() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(3);
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn lt_test_4() {
         let lhs = Value::F32(3.5);
         let rhs = Value::F32(4.1);
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn lt_test_5() {
         let lhs = Value::F32(4.1);
         let rhs = Value::F32(3.5);
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn lt_test_6() {
         let lhs = Value::F32(3.5);
         let rhs = Value::F32(3.5);
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn lt_test_7() {
         let lhs = Value::Char('d');
         let rhs = Value::Char('e');
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn lt_test_8() {
         let lhs = Value::Char('e');
         let rhs = Value::Char('d');
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn lt_test_9() {
         let lhs = Value::Char('d');
         let rhs = Value::Char('d');
-        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
@@ -1809,63 +1467,63 @@ mod test {
     fn le_test_1() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(4);
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn le_test_2() {
         let lhs = Value::I32(4);
         let rhs = Value::I32(3);
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn le_test_3() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(3);
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn le_test_4() {
         let lhs = Value::F32(3.5);
         let rhs = Value::F32(4.1);
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn le_test_5() {
         let lhs = Value::F32(4.1);
         let rhs = Value::F32(3.5);
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn le_test_6() {
         let lhs = Value::F32(3.5);
         let rhs = Value::F32(3.5);
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn le_test_7() {
         let lhs = Value::Char('d');
         let rhs = Value::Char('e');
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn le_test_8() {
         let lhs = Value::Char('e');
         let rhs = Value::Char('d');
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn le_test_9() {
         let lhs = Value::Char('d');
         let rhs = Value::Char('d');
-        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(LE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
@@ -1921,63 +1579,63 @@ mod test {
     fn gt_test_1() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(4);
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn gt_test_2() {
         let lhs = Value::I32(4);
         let rhs = Value::I32(3);
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn gt_test_3() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(3);
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn gt_test_4() {
         let lhs = Value::F32(3.5);
         let rhs = Value::F32(4.1);
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn gt_test_5() {
         let lhs = Value::F32(4.1);
         let rhs = Value::F32(3.5);
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn gt_test_6() {
         let lhs = Value::F32(3.5);
         let rhs = Value::F32(3.5);
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn gt_test_7() {
         let lhs = Value::Char('d');
         let rhs = Value::Char('e');
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn gt_test_8() {
         let lhs = Value::Char('e');
         let rhs = Value::Char('d');
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn gt_test_9() {
         let lhs = Value::Char('d');
         let rhs = Value::Char('d');
-        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GT.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
@@ -2033,63 +1691,63 @@ mod test {
     fn ge_test_1() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(4);
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ge_test_2() {
         let lhs = Value::I32(4);
         let rhs = Value::I32(3);
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ge_test_3() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(3);
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ge_test_4() {
         let lhs = Value::F32(3.5);
         let rhs = Value::F32(4.1);
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ge_test_5() {
         let lhs = Value::F32(4.1);
         let rhs = Value::F32(3.5);
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ge_test_6() {
         let lhs = Value::F32(3.5);
         let rhs = Value::F32(3.5);
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ge_test_7() {
         let lhs = Value::Char('d');
         let rhs = Value::Char('e');
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), false);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(false));
     }
 
     #[test]
     fn ge_test_8() {
         let lhs = Value::Char('e');
         let rhs = Value::Char('d');
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn ge_test_9() {
         let lhs = Value::Char('d');
         let rhs = Value::Char('d');
-        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), true);
+        assert_eq!(GE.apply_to(lhs, rhs).unwrap(), Value::Bool(true));
     }
 
     #[test]
