@@ -244,58 +244,54 @@ impl BinaryOp {
         let apply_err = Err(OpApplicationError::BadBinaryOp(self.clone(), lhs, rhs));
 
         macro_rules! implement_for {
-            [ $( ($l:ident, $r:ident, $res:ident, $op:tt) ),+, default => $default:expr ] => {
+            [ $( $l:ident $r:ident => $res:ident : $op:tt ),+, ] => {
+                // remove trailing comma
+                implement_for![$($l $r => $res : $op),+]
+            };
+            [ $( $l:ident $r:ident => $res:ident : $op:tt ),+ ] => {
                 match (lhs, rhs) {
                     $( (Value::$l(l), Value::$r(r)) => Ok(Value::$res($op(l,r))) ),+ ,
-                    _ => $default
+                    _ => apply_err
                 }
             };
         }
 
         match self {
             BinaryOp::ADD => implement_for![
-                (I32, I32, I32, (|l,r| l + r)),
-                (F32, F32, F32, (|l,r| l + r)),
-                (IPtr, I32, IPtr, ptr_add),
-                (SPtr, I32, SPtr, ptr_add),
-                default => apply_err
+                I32 I32 => I32 : (|l,r| l + r),
+                F32 F32 => F32 : (|l,r| l + r),
+                IPtr I32 => IPtr : ptr_add,
+                SPtr I32 => SPtr : ptr_add,
             ],
             BinaryOp::SUB => implement_for![
-                (I32, I32, I32, (|l,r| l - r)),
-                (F32, F32, F32, (|l,r| l - r)),
-                (IPtr, I32, IPtr, ptr_sub),
-                (SPtr, I32, SPtr, ptr_sub),
-                default => apply_err
+                I32 I32 => I32 : (|l,r| l - r),
+                F32 F32 => F32 : (|l,r| l - r),
+                IPtr I32 => IPtr : ptr_sub,
+                SPtr I32 => SPtr : ptr_sub,
             ],
             BinaryOp::MUL => implement_for![
-                (I32, I32, I32, (|l,r| l * r)),
-                (F32, F32, F32, (|l,r| l * r)),
-                default => apply_err
+                I32 I32 => I32 : (|l,r| l * r),
+                F32 F32 => F32 : (|l,r| l * r)
             ],
             BinaryOp::DIV =>implement_for![
-                (I32, I32, I32, (|l,r| l / r)),
-                (F32, F32, F32, (|l,r| l / r)),
-                default => apply_err
+                I32 I32 => I32 : (|l,r| l / r),
+                F32 F32 => F32 : (|l,r| l / r),
             ],
             BinaryOp::MOD => implement_for![
-                (I32, I32, I32, (|l,r| l % r)),
-                (F32, F32, F32, (|l,r| l % r)),
-                default => apply_err
+                I32 I32 => I32 : (|l,r| l % r),
+                F32 F32 => F32 : (|l,r| l % r),
             ],
             BinaryOp::AND => implement_for![
-                (Bool, Bool, Bool, (|l,r| l && r)),
-                (I32, I32, I32, (|l,r| l & r)),
-                default => apply_err
+                Bool Bool => Bool : (|l,r| l && r),
+                I32 I32 => I32 : (|l,r| l & r),
             ],
             BinaryOp::OR => implement_for![
-                (Bool, Bool, Bool, (|l,r| l || r)),
-                (I32, I32, I32, (|l,r| l | r)),
-                default => apply_err
+                Bool Bool => Bool : (|l,r| l || r),
+                I32 I32 => I32 : (|l,r| l | r),
             ],
             BinaryOp::XOR => implement_for![
-                (Bool, Bool, Bool, (|l,r| l != r)),
-                (I32, I32, I32, (|l,r| l ^ r)),
-                default => apply_err
+                Bool Bool => Bool : (|l,r| l != r),
+                I32 I32 => I32 : (|l,r| l ^ r),
             ],
         }
     }
