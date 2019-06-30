@@ -39,8 +39,8 @@ label_6:
     ADD!            ; 
     LOADFROM!       ; Push value of variable "ymax" to stack
     LT!
-    PUSHC Bool(False)
-    BRANCH.EQ! label_5
+    NOT!
+    BRANCH! label_5
 label_40:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -62,8 +62,8 @@ label_8:
     ADD!            ; 
     LOADFROM!       ; Push value of variable "xmax" to stack
     LT!
-    PUSHC Bool(False)
-    BRANCH.EQ! label_7
+    NOT!
+    BRANCH! label_7
 label_34:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -190,8 +190,8 @@ label_15:
     LOADFROM!       ; Push value of variable "max" to stack
     LT!
     AND!
-    PUSHC Bool(False)
-    BRANCH.EQ! label_14
+    NOT!
+    BRANCH! label_14
 label_20:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
@@ -339,8 +339,8 @@ label_14:
     LOADFROM!       ; Push value of variable "iteration" to stack
     PUSHC I32(175)
     LT!
-    PUSHC Bool(False)
-    BRANCH.EQ! label_32
+    NOT!
+    BRANCH! label_32
 label_25:
     PUSHR $fp       ; Pushing local block frame
     PUSHR $fp
