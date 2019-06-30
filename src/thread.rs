@@ -24,7 +24,7 @@ License:
 
 */
 
-use cookie_base as cookie;
+use instruction as cookie;
 use interpreter::*;
 use std::collections::HashMap;
 

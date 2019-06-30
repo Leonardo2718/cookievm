@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2018 Leonardo Banderali
+Copyright (C) 2018, 2019 Leonardo Banderali
 
 License:
 
@@ -30,7 +30,7 @@ use std::io::prelude::Read;
 use std::fs::File;
 use std::io::BufReader;
 
-mod cookie_base;
+mod instruction;
 mod interpreter;
 mod thread;
 mod debugger;

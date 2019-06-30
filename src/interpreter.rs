@@ -24,7 +24,7 @@ License:
 
 */
 
-use cookie_base as cookie;
+use instruction as cookie;
 use std::io;
 use std::io::Write;
 use std::fmt;
@@ -183,7 +183,7 @@ impl Interpreter {
     }
 
     pub fn exec_instruction(&mut self, inst: cookie::Instruction) -> Result<Status> {
-        use cookie_base::Instruction::*;
+        use instruction::Instruction::*;
         self.pc = match inst {
             PUSHR(reg) => { self.do_pushr(reg)?; self.pc + 1 },
             PUSHC(v) => { self.stack.push(v.clone()); self.pc + 1 },
@@ -393,7 +393,7 @@ impl Interpreter {
     }
 
     fn get_target_addr(&self, t: &cookie::Target) -> Result<usize> {
-        use cookie_base::Target::*;
+        use instruction::Target::*;
         match t {
             &LocalSymbol(addr, _) => Ok(addr),
             &ExternalSymbol(_, ref l) => Err(InterpreterError::UndefinedSymbol(l.to_string())),

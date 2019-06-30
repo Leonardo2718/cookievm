@@ -24,7 +24,7 @@ License:
 
 */
 
-use cookie_base::*;
+use instruction::*;
 use lexer;
 use lexer::*;
 use std::iter::Iterator;
@@ -307,10 +307,10 @@ fn parse_dss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source, Sour
 }
 
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
-    use cookie_base::Instruction::*;
-    use cookie_base::BinaryOp::*;
-    use cookie_base::UnaryOp::*;
-    use cookie_base::Target::*;
+    use instruction::Instruction::*;
+    use instruction::BinaryOp::*;
+    use instruction::UnaryOp::*;
+    use instruction::Target::*;
     let mut insts: Vec<Instruction> = Vec::new();
     let mut symbols: SymbolTable = HashMap::new();
 
@@ -413,8 +413,8 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use cookie_base::Instruction::*;
-    use cookie_base::Target::*;
+    use instruction::Instruction::*;
+    use instruction::Target::*;
 
     #[test]
     fn parse_dss_test_1() {

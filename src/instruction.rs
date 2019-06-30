@@ -370,8 +370,8 @@ pub type InstructionList = Vec<Instruction>;
 pub type SymbolTable = HashMap<String, usize>;
 
 fn resolve_symbol(inst: &Instruction, symbols: &SymbolTable) -> Instruction {
-    use cookie_base::Instruction::*;
-    use cookie_base::Target::*;
+    use instruction::Instruction::*;
+    use instruction::Target::*;
 
     let resolver = |l: &str| if let Some(n) = symbols.get(&l.to_string()) { LocalSymbol(*n, l.to_string()) } else { UnresolvedSymbol(l.to_string()) };
 

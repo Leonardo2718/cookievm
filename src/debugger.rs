@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2018 Leonardo Banderali
+Copyright (C) 2018, 2019 Leonardo Banderali
 
 License:
 
@@ -24,7 +24,7 @@ License:
 
 */
 
-use cookie_base as cookie;
+use instruction as cookie;
 use interpreter::Interpreter;
 use interpreter::Status;
 use interpreter::InterpreterError;
