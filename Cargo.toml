@@ -6,3 +6,7 @@ authors = ["Leonardo Banderali <leonardo2718@protonmail.com>"]
 [dependencies]
 rustyline = "1.0.0"
 argparse = "0.2.1"
+
+[profile.dev]
+opt-level = 2  # use optimizations in development so testing doesn't take forever
+debug = true
