@@ -38,26 +38,30 @@ pub struct Thread {
 
 impl Thread {
     pub fn new(instructions: cookie::InstructionList) -> Thread {
-        Thread  { interp: Interpreter::new(instructions)
-                , status: Status::Ok
-                }
+        Thread {
+            interp: Interpreter::new(instructions),
+            status: Status::Ok,
+        }
     }
 
     pub fn exec(&mut self) -> Result<Option<cookie::Value>> {
         loop {
-            self.status = self.interp.exec_next()?; 
-            if self.status == Status::Finish { break; }
+            self.status = self.interp.exec_next()?;
+            if self.status == Status::Finish {
+                break;
+            }
         }
         return Ok(self.interp.stack.pop());
     }
 }
 
 #[cfg(test)]
+#[rustfmt::skip]
 mod test {
-    use super::*;
-    use super::cookie::*;
     use super::cookie::Instruction::*;
     use super::cookie::Target::*;
+    use super::cookie::*;
+    use super::*;
 
     #[test]
     fn pushc_test_1() {

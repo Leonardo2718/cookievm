@@ -27,22 +27,22 @@ License:
 use instruction::*;
 use lexer;
 use lexer::*;
-use std::iter::Iterator;
 use std::collections::HashMap;
-use std::fmt;
-use std::error;
-use std::result;
 use std::convert;
+use std::error;
+use std::fmt;
+use std::iter::Iterator;
+use std::result;
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum ParserError<'a> {
     UnexpectedToken(Token),
     UnexpectedIdentifier(String),
     ExpectingMoreTokens,
-    LexerError(lexer::Error<'a>)
+    LexerError(lexer::Error<'a>),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Error<'a> {
     pub error: ParserError<'a>,
     pub position: Position<'a>,
@@ -61,27 +61,43 @@ impl<'a> error::Error for ParserError<'a> {
             &UnexpectedToken(_) => "Found an unexpected token while parsing",
             &UnexpectedIdentifier(_) => "Found an unexpected identifier while parsing",
             &ExpectingMoreTokens => "Expecting more tokens but token stream ended",
-            LexerError(_) => "Lexing error occured while parsing (see cause)"
+            LexerError(_) => "Lexing error occured while parsing (see cause)",
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
         match self {
             &ParserError::LexerError(ref e) => Some(e),
-            _ => None
+            _ => None,
         }
     }
 }
 
 impl<'a> convert::From<ParserError<'a>> for Error<'a> {
     fn from<'b>(error: ParserError<'b>) -> Error<'b> {
-        Error{error, position: Position{source: "", position: 0, line: 0, column: 0}}
+        Error {
+            error,
+            position: Position {
+                source: "",
+                position: 0,
+                line: 0,
+                column: 0,
+            },
+        }
     }
 }
 
 impl<'a> convert::From<lexer::Error<'a>> for Error<'a> {
     fn from<'b>(error: lexer::Error<'b>) -> Error<'b> {
-        Error{error: ParserError::LexerError(error), position: Position{source: "", position: 0, line: 0, column: 0}}
+        Error {
+            error: ParserError::LexerError(error),
+            position: Position {
+                source: "",
+                position: 0,
+                line: 0,
+                column: 0,
+            },
+        }
     }
 }
 
@@ -97,23 +113,29 @@ macro_rules! unexpected_token ( ($t:expr)  => ( Err(Error{error: ParserError::Un
 macro_rules! unexpected_id    ( ($id:expr,$p:expr) => ( Err(Error{error: ParserError::UnexpectedIdentifier($id), position: $p})) );
 
 macro_rules! eat_token_ {
-    ($iter:expr, $expect:tt) => ({
-        let t = $iter.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    ($iter:expr, $expect:tt) => {{
+        let t = $iter
+            .next()
+            .transpose()?
+            .ok_or(ParserError::ExpectingMoreTokens)?;
         match t.token {
             Token::$expect => Ok(t.token),
             _ => unexpected_token!(t),
         }
-    })
+    }};
 }
 
 macro_rules! eat_token {
-    ($iter:expr, $expect:tt) => ({
-        let t = $iter.next().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    ($iter:expr, $expect:tt) => {{
+        let t = $iter
+            .next()
+            .transpose()?
+            .ok_or(ParserError::ExpectingMoreTokens)?;
         match t.token {
             Token::$expect(v) => Ok(v),
             _ => unexpected_token!(t),
         }
-    })
+    }};
 }
 
 fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
@@ -126,7 +148,11 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
         })
     );
 
-    let t = lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    let t = lexer
+        .next()
+        .clone()
+        .transpose()?
+        .ok_or(ParserError::ExpectingMoreTokens)?;
     match t.token {
         Token::Void => Ok(Value::Void),
         Token::Ident(id) => match id.to_lowercase().as_ref() {
@@ -136,7 +162,7 @@ fn parse_value<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Value> {
             "bool" => parse_as!(Bool, Bool),
             "iptr" => parse_as!(Address, IPtr),
             "sptr" => parse_as!(Address, SPtr),
-            _id => return unexpected_id!(_id.to_string(), t.pos)
+            _id => return unexpected_id!(_id.to_string(), t.pos),
         },
         _ => return unexpected_token!(t),
     }
@@ -168,7 +194,11 @@ fn parse_source<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
         ($reg:expr) => (Ok(Source::Register($reg)))
     );
 
-    let t = lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    let t = lexer
+        .next()
+        .clone()
+        .transpose()?
+        .ok_or(ParserError::ExpectingMoreTokens)?;
     match t.token {
         Token::Void => Ok(Source::Immediate(Value::Void)),
         Token::Ident(id) => match id.to_lowercase().as_ref() {
@@ -178,7 +208,7 @@ fn parse_source<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
             "bool" => parse_as_value!(Bool, Bool),
             "iptr" => parse_as_value!(Address, IPtr),
             "sptr" => parse_as_value!(Address, SPtr),
-            id => return unexpected_id!(id.to_string(), t.pos)
+            id => return unexpected_id!(id.to_string(), t.pos),
         },
         Token::SP => parse_as_register!(RegisterName::StackPointer),
         Token::FP => parse_as_register!(RegisterName::FramePointer),
@@ -194,7 +224,11 @@ fn parse_destination<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Destination> {
         ($reg:expr) => (Ok(Destination::Register($reg)))
     );
 
-    let t = lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    let t = lexer
+        .next()
+        .clone()
+        .transpose()?
+        .ok_or(ParserError::ExpectingMoreTokens)?;
     match t.token {
         Token::SP => parse_as_register!(RegisterName::StackPointer),
         Token::FP => parse_as_register!(RegisterName::FramePointer),
@@ -206,7 +240,11 @@ fn parse_destination<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Destination> {
 }
 
 fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
-    let t = lexer.next().clone().transpose()?.ok_or(ParserError::ExpectingMoreTokens)?;
+    let t = lexer
+        .next()
+        .clone()
+        .transpose()?
+        .ok_or(ParserError::ExpectingMoreTokens)?;
     match t.token {
         Token::Void => Ok(Type::Void),
         Token::Ident(id) => match id.to_lowercase().as_ref() {
@@ -217,7 +255,7 @@ fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Type> {
             "iptr" => Ok(Type::IPtr),
             "sptr" => Ok(Type::SPtr),
             id => return unexpected_id!(id.to_string(), t.pos),
-        }
+        },
         _ => return unexpected_token!(t),
     }
 }
@@ -226,8 +264,14 @@ fn parse_s<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
     let mut peekable = lexer.clone().peekable();
     let peeked = peekable.peek().ok_or(ParserError::ExpectingMoreTokens)?;
     match peeked.clone()?.token {
-        Token::ExclamationMark => { lexer.next(); Ok(Source::Stack(0)) },
-        Token::QuestionMark => { lexer.next(); Ok(Source::Stack(0)) },
+        Token::ExclamationMark => {
+            lexer.next();
+            Ok(Source::Stack(0))
+        }
+        Token::QuestionMark => {
+            lexer.next();
+            Ok(Source::Stack(0))
+        }
         _ => {
             let src = parse_source(lexer)?;
             Ok(src)
@@ -239,8 +283,14 @@ fn parse_d<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Destination> {
     let mut peekable = lexer.clone().peekable();
     let peeked = peekable.peek().ok_or(ParserError::ExpectingMoreTokens)?;
     match peeked.clone()?.token {
-        Token::ExclamationMark => { lexer.next(); Ok(Destination::Stack(0)) },
-        Token::QuestionMark => { lexer.next(); Ok(Destination::Stack(0)) },
+        Token::ExclamationMark => {
+            lexer.next();
+            Ok(Destination::Stack(0))
+        }
+        Token::QuestionMark => {
+            lexer.next();
+            Ok(Destination::Stack(0))
+        }
         _ => {
             let dest = parse_destination(lexer)?;
             Ok(dest)
@@ -252,8 +302,14 @@ fn parse_ss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Source, Source)> {
     let mut peekable = lexer.clone().peekable();
     let peeked = peekable.peek().ok_or(ParserError::ExpectingMoreTokens)?;
     match peeked.clone()?.token {
-        Token::ExclamationMark => { lexer.next(); Ok((Source::Stack(1), Source::Stack(0))) },
-        Token::QuestionMark => { lexer.next(); Ok((Source::Stack(0), Source::Stack(1))) },
+        Token::ExclamationMark => {
+            lexer.next();
+            Ok((Source::Stack(1), Source::Stack(0)))
+        }
+        Token::QuestionMark => {
+            lexer.next();
+            Ok((Source::Stack(0), Source::Stack(1)))
+        }
         _ => {
             let src1 = parse_source(lexer)?;
             let src2 = parse_source(lexer)?;
@@ -266,8 +322,14 @@ fn parse_sss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Source, Source, Source)> 
     let mut peekable = lexer.clone().peekable();
     let peeked = peekable.peek().ok_or(ParserError::ExpectingMoreTokens)?;
     match peeked.clone()?.token {
-        Token::ExclamationMark => { lexer.next(); Ok((Source::Stack(2), Source::Stack(1), Source::Stack(0))) },
-        Token::QuestionMark => { lexer.next(); Ok((Source::Stack(0), Source::Stack(1), Source::Stack(2))) },
+        Token::ExclamationMark => {
+            lexer.next();
+            Ok((Source::Stack(2), Source::Stack(1), Source::Stack(0)))
+        }
+        Token::QuestionMark => {
+            lexer.next();
+            Ok((Source::Stack(0), Source::Stack(1), Source::Stack(2)))
+        }
         _ => {
             let src1 = parse_source(lexer)?;
             let src2 = parse_source(lexer)?;
@@ -281,8 +343,14 @@ fn parse_ds<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source)> {
     let mut peekable = lexer.clone().peekable();
     let peeked = peekable.peek().ok_or(ParserError::ExpectingMoreTokens)?;
     match peeked.clone()?.token {
-        Token::ExclamationMark => { lexer.next(); Ok((Destination::Stack(0), Source::Stack(0))) },
-        Token::QuestionMark => { lexer.next(); Ok((Destination::Stack(0), Source::Stack(0))) },
+        Token::ExclamationMark => {
+            lexer.next();
+            Ok((Destination::Stack(0), Source::Stack(0)))
+        }
+        Token::QuestionMark => {
+            lexer.next();
+            Ok((Destination::Stack(0), Source::Stack(0)))
+        }
         _ => {
             let dest = parse_destination(lexer)?;
             let src = parse_source(lexer)?;
@@ -295,8 +363,14 @@ fn parse_dss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source, Sour
     let mut peekable = lexer.clone().peekable();
     let peeked = peekable.peek().ok_or(ParserError::ExpectingMoreTokens)?;
     match peeked.clone()?.token {
-        Token::ExclamationMark => { lexer.next(); Ok((Destination::Stack(0), Source::Stack(1), Source::Stack(0))) },
-        Token::QuestionMark => { lexer.next(); Ok((Destination::Stack(0), Source::Stack(0), Source::Stack(1))) },
+        Token::ExclamationMark => {
+            lexer.next();
+            Ok((Destination::Stack(0), Source::Stack(1), Source::Stack(0)))
+        }
+        Token::QuestionMark => {
+            lexer.next();
+            Ok((Destination::Stack(0), Source::Stack(0), Source::Stack(1)))
+        }
         _ => {
             let dest = parse_destination(lexer)?;
             let src1 = parse_source(lexer)?;
@@ -307,25 +381,25 @@ fn parse_dss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source, Sour
 }
 
 pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
-    use instruction::Instruction::*;
     use instruction::BinaryOp::*;
-    use instruction::UnaryOp::*;
+    use instruction::Instruction::*;
     use instruction::Target::*;
+    use instruction::UnaryOp::*;
     let mut insts: Vec<Instruction> = Vec::new();
     let mut symbols: SymbolTable = HashMap::new();
 
     macro_rules! push_bop {
-        ($op:ident) => ({
+        ($op:ident) => {{
             let (dest, src1, src2) = parse_dss(&mut lexer)?;
             insts.push(BOp($op, dest, src1, src2));
-        })
+        }};
     }
 
     macro_rules! push_uop {
-        ($op:ident) => ({
+        ($op:ident) => {{
             let (dest, src) = parse_ds(&mut lexer)?;
             insts.push(UOp($op, dest, src));
-        })
+        }};
     }
 
     loop {
@@ -355,51 +429,60 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "loadfrom" => {
                     let (dest, src) = parse_ds(&mut lexer)?;
                     insts.push(LOADFROM(dest, src));
-                },
+                }
                 "storeto" => {
                     let (src1, src2) = parse_ss(&mut lexer)?;
                     insts.push(STORETO(src1, src2));
-                },
+                }
                 "djump" => {
                     let src = parse_source(&mut lexer)?;
                     insts.push(DJUMP(src));
-                },
+                }
                 "branch" => {
                     let src = parse_s(&mut lexer)?;
                     let l = eat_token!(lexer, Ident)?;
                     insts.push(BRANCH(src, UnresolvedSymbol(l)));
-                },
+                }
                 "dbranch" => {
                     let (src1, src2) = parse_ss(&mut lexer)?;
                     insts.push(DBRANCH(src1, src2));
-                },
+                }
                 "print" => {
                     let src = parse_s(&mut lexer)?;
                     insts.push(PRINT(src));
-                },
+                }
                 "read" => {
                     let t = parse_type(&mut lexer)?;
                     let dest = parse_d(&mut lexer)?;
                     insts.push(READ(t, dest));
-                },
+                }
                 "pushc" => {
                     let val = parse_value(&mut lexer)?;
                     insts.push(PUSHC(val));
-                },
+                }
                 "pushr" => {
                     let reg = parse_register(&mut lexer)?;
                     insts.push(PUSHR(reg));
-                },
+                }
                 "popr" => {
                     let reg = parse_register(&mut lexer)?;
                     insts.push(POPR(reg));
-                },
-                "pop" => { insts.push(POP); },
-                "jump" => { let l = eat_token!(lexer, Ident)?; insts.push(JUMP(UnresolvedSymbol(l))); },
-                "exit" => { insts.push(EXIT); }
-                id => return unexpected_id!(id.to_string(), t.unwrap().pos)
+                }
+                "pop" => {
+                    insts.push(POP);
+                }
+                "jump" => {
+                    let l = eat_token!(lexer, Ident)?;
+                    insts.push(JUMP(UnresolvedSymbol(l)));
+                }
+                "exit" => {
+                    insts.push(EXIT);
+                }
+                id => return unexpected_id!(id.to_string(), t.unwrap().pos),
             },
-            Some(Token::Label(l)) => { symbols.insert(l.to_string(), insts.len()); },
+            Some(Token::Label(l)) => {
+                symbols.insert(l.to_string(), insts.len());
+            }
             Some(_) => return unexpected_token!(t.clone().unwrap()),
             None => break,
         };
@@ -420,89 +503,138 @@ mod test {
     fn parse_dss_test_1() {
         let insts = parse(Lexer::new("Add @0 @1 @0")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::BOp(BinaryOp::ADD,
-                                          Destination::Stack(0), 
-                                          Source::Stack(1), 
-                                          Source::Stack(0)));
+        assert_eq!(
+            insts[0],
+            Instruction::BOp(
+                BinaryOp::ADD,
+                Destination::Stack(0),
+                Source::Stack(1),
+                Source::Stack(0)
+            )
+        );
     }
 
     #[test]
     fn parse_dss_test_2() {
         let insts = parse(Lexer::new("EQ @0 @1 @0")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::BOp(BinaryOp::EQ,
-                                          Destination::Stack(0), 
-                                          Source::Stack(1), 
-                                          Source::Stack(0)));
+        assert_eq!(
+            insts[0],
+            Instruction::BOp(
+                BinaryOp::EQ,
+                Destination::Stack(0),
+                Source::Stack(1),
+                Source::Stack(0)
+            )
+        );
     }
 
     #[test]
     fn parse_dss_test_3() {
         let insts = parse(Lexer::new("sub !")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::BOp(BinaryOp::SUB,
-                                          Destination::Stack(0), 
-                                          Source::Stack(1), 
-                                          Source::Stack(0)));
+        assert_eq!(
+            insts[0],
+            Instruction::BOp(
+                BinaryOp::SUB,
+                Destination::Stack(0),
+                Source::Stack(1),
+                Source::Stack(0)
+            )
+        );
     }
 
     #[test]
     fn parse_dss_test_4() {
         let insts = parse(Lexer::new("mUl ?")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::BOp(BinaryOp::MUL,
-                                          Destination::Stack(0), 
-                                          Source::Stack(0), 
-                                          Source::Stack(1)));
+        assert_eq!(
+            insts[0],
+            Instruction::BOp(
+                BinaryOp::MUL,
+                Destination::Stack(0),
+                Source::Stack(0),
+                Source::Stack(1)
+            )
+        );
     }
 
     #[test]
     fn parse_ds_test_1() {
         let insts = parse(Lexer::new("NOT @0 @0")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0)));
+        assert_eq!(
+            insts[0],
+            Instruction::UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0))
+        );
     }
 
     #[test]
     fn parse_ds_test_2() {
         let insts = parse(Lexer::new("CVT F32 @0 @0")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::UOp(UnaryOp::CVT(Type::F32), Destination::Stack(0), Source::Stack(0)));
+        assert_eq!(
+            insts[0],
+            Instruction::UOp(
+                UnaryOp::CVT(Type::F32),
+                Destination::Stack(0),
+                Source::Stack(0)
+            )
+        );
     }
 
     #[test]
     fn parse_ds_test_3() {
         let insts = parse(Lexer::new("LoadFrom !")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::LOADFROM(Destination::Stack(0), Source::Stack(0)));
+        assert_eq!(
+            insts[0],
+            Instruction::LOADFROM(Destination::Stack(0), Source::Stack(0))
+        );
     }
 
     #[test]
     fn parse_ds_test_4() {
         let insts = parse(Lexer::new("CVT F32 ?")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::UOp(UnaryOp::CVT(Type::F32), Destination::Stack(0), Source::Stack(0)));
+        assert_eq!(
+            insts[0],
+            Instruction::UOp(
+                UnaryOp::CVT(Type::F32),
+                Destination::Stack(0),
+                Source::Stack(0)
+            )
+        );
     }
 
     #[test]
     fn parse_ss_test_1() {
         let insts = parse(Lexer::new("StoreTo @1 @0")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::STORETO(Source::Stack(1), Source::Stack(0)))
+        assert_eq!(
+            insts[0],
+            Instruction::STORETO(Source::Stack(1), Source::Stack(0))
+        )
     }
 
     #[test]
     fn parse_ss_test_2() {
         let insts = parse(Lexer::new("StoreTo !")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::STORETO(Source::Stack(1), Source::Stack(0)))
+        assert_eq!(
+            insts[0],
+            Instruction::STORETO(Source::Stack(1), Source::Stack(0))
+        )
     }
 
     #[test]
     fn parse_ss_test_3() {
         let insts = parse(Lexer::new("StoreTo ?")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(insts[0], Instruction::STORETO(Source::Stack(0), Source::Stack(1)))
+        assert_eq!(
+            insts[0],
+            Instruction::STORETO(Source::Stack(0), Source::Stack(1))
+        )
     }
 
     #[test]
@@ -643,7 +775,15 @@ mod test {
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(3.1)));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(4.2)));
-        assert_eq!(*iter.next().unwrap(), BOp(BinaryOp::ADD, Destination::Stack(0), Source::Stack(1), Source::Stack(0)));
+        assert_eq!(
+            *iter.next().unwrap(),
+            BOp(
+                BinaryOp::ADD,
+                Destination::Stack(0),
+                Source::Stack(1),
+                Source::Stack(0)
+            )
+        );
         assert!(iter.next().is_none());
     }
 
@@ -651,7 +791,10 @@ mod test {
     fn parsre_test_3() {
         let insts = parse(Lexer::new("jump L1 L1: pushc Bool(true)")).unwrap();
         let mut iter = insts.iter();
-        assert_eq!(*iter.next().unwrap(), JUMP(LocalSymbol(1, "L1".to_string())));
+        assert_eq!(
+            *iter.next().unwrap(),
+            JUMP(LocalSymbol(1, "L1".to_string()))
+        );
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::Bool(true)));
         assert!(iter.next().is_none());
     }

@@ -24,11 +24,11 @@ License:
 
 */
 
+use std::collections::HashMap;
+use std::convert;
+use std::error;
 use std::fmt;
 use std::result;
-use std::error;
-use std::convert;
-use std::collections::HashMap;
 
 // cookie data types and value ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -57,13 +57,14 @@ macro_rules! define_types {
     }
 }
 
-define_types![ (I32, i32)
-             , (F32, f32)
-             , (Char, char)
-             , (Bool, bool)
-             , (IPtr, usize)
-             , (SPtr, usize)
-             ];
+define_types![
+    (I32, i32),
+    (F32, f32),
+    (Char, char),
+    (Bool, bool),
+    (IPtr, usize),
+    (SPtr, usize)
+];
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -77,27 +78,43 @@ impl fmt::Display for Value {
         match self {
             IPtr(a) => write!(f, "IPtr(0x{:x})", a),
             SPtr(a) => write!(f, "SPtr(0x{:x})", a),
-            v => write!(f, "{:?}", v)
+            v => write!(f, "{:?}", v),
         }
     }
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConversionError(Value, Type);
 
 impl Value {
-    pub fn is_type(&self, t: Type) -> bool { t == self.get_type() }
+    pub fn is_type(&self, t: Type) -> bool {
+        t == self.get_type()
+    }
 
     pub fn convert_to(&self, t: Type) -> result::Result<Value, ConversionError> {
-        if self.is_type(t) { return Ok(*self); }
+        if self.is_type(t) {
+            return Ok(*self);
+        }
 
         macro_rules! cast {
-            (I32, Bool; $v:expr) => { $v != 0 };
-            (F32, Bool; $v:expr) => { $v != 0.0 };
-            (Char, Bool; $v:expr) => { $v != '\0' };
-            (IPtr, Bool; $v:expr) => { $v != 0 };
-            (SPtr, Bool; $v:expr) => { $v != 0 };
-            ($S:ident, $D:ident; $v:expr) => { $v as RustType::$D };
+            (I32, Bool; $v:expr) => {
+                $v != 0
+            };
+            (F32, Bool; $v:expr) => {
+                $v != 0.0
+            };
+            (Char, Bool; $v:expr) => {
+                $v != '\0'
+            };
+            (IPtr, Bool; $v:expr) => {
+                $v != 0
+            };
+            (SPtr, Bool; $v:expr) => {
+                $v != 0
+            };
+            ($S:ident, $D:ident; $v:expr) => {
+                $v as RustType::$D
+            };
         }
 
         macro_rules! allowed_cvt {
@@ -109,27 +126,28 @@ impl Value {
             };
         }
 
-        return allowed_cvt! [ F32 -> I32
-                            , Char -> I32
-                            , Bool -> I32
-                            , IPtr -> I32
-                            , SPtr -> I32
-                            , I32 -> F32
-                            // , I32 -> Char
-                            , I32 -> Bool
-                            , F32 -> Bool
-                            , Char -> Bool
-                            , IPtr -> Bool
-                            , SPtr -> Bool
-                            , I32 -> IPtr
-                            , I32 -> SPtr
-                            ];
+        return allowed_cvt! [
+          F32 -> I32
+        , Char -> I32
+        , Bool -> I32
+        , IPtr -> I32
+        , SPtr -> I32
+        , I32 -> F32
+        // , I32 -> Char
+        , I32 -> Bool
+        , F32 -> Bool
+        , Char -> Bool
+        , IPtr -> Bool
+        , SPtr -> Bool
+        , I32 -> IPtr
+        , I32 -> SPtr
+        ];
     }
 }
 
 // cookie register names ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#[derive(Debug,Clone,Copy,PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RegisterName {
     StackPointer,
     FramePointer,
@@ -141,17 +159,17 @@ impl fmt::Display for RegisterName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             RegisterName::R(i) => write!(f, "R{}", i),
-            r => write!(f, "{:?}", r)
+            r => write!(f, "{:?}", r),
         }
     }
 }
 
 // cookie operations ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum OpApplicationError {
-    BadBinaryOp(BinaryOp,Value,Value),
-    BadUnaryOp(UnaryOp,Value),
+    BadBinaryOp(BinaryOp, Value, Value),
+    BadUnaryOp(UnaryOp, Value),
     BadConversion(ConversionError),
 }
 
@@ -165,8 +183,10 @@ impl error::Error for OpApplicationError {
     fn description(&self) -> &str {
         use self::OpApplicationError::*;
         match self {
-            &BadBinaryOp(_,_,_) => "Cannot apply binary operation to given values (cannot operate on given types)",
-            &BadUnaryOp(_,_) => "Cannot apply unary operation to given value (unsupported type)",
+            &BadBinaryOp(_, _, _) => {
+                "Cannot apply binary operation to given values (cannot operate on given types)"
+            }
+            &BadUnaryOp(_, _) => "Cannot apply unary operation to given value (unsupported type)",
             &BadConversion(_) => "Cannot convert source value to target type",
         }
     }
@@ -182,27 +202,29 @@ impl convert::From<ConversionError> for OpApplicationError {
     }
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOp {
-    NEG, NOT, CVT(Type)
+    NEG,
+    NOT,
+    CVT(Type),
 }
 
 impl UnaryOp {
-    pub fn apply_to(&self, val: Value) -> result::Result<Value,OpApplicationError> {
-        let apply_err = OpApplicationError::BadUnaryOp(self.clone(),val);
+    pub fn apply_to(&self, val: Value) -> result::Result<Value, OpApplicationError> {
+        let apply_err = OpApplicationError::BadUnaryOp(self.clone(), val);
 
         let v = match self {
             UnaryOp::NEG => match val {
                 Value::I32(v) => Value::I32(-v),
                 Value::F32(v) => Value::F32(-v),
                 _ => return Err(apply_err),
-            }
+            },
             UnaryOp::NOT => match val {
                 Value::Bool(v) => Value::Bool(!v),
                 Value::I32(v) => Value::I32(!v),
                 _ => return Err(apply_err),
-            }
-            UnaryOp::CVT(t) => val.convert_to(*t)?
+            },
+            UnaryOp::CVT(t) => val.convert_to(*t)?,
         };
 
         return Ok(v);
@@ -221,7 +243,8 @@ impl fmt::Display for UnaryOp {
     }
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+#[rustfmt::skip]
 pub enum BinaryOp {
     ADD, SUB, MUL, DIV, MOD, // arithmetic operations
     AND, OR, XOR,   // boolean operations
@@ -230,14 +253,20 @@ pub enum BinaryOp {
     LT, LE, GT, GE, // numeric comparison
 }
 
-fn ptr_add(lhs: usize, rhs:i32) -> usize {
-    if rhs < 0 { lhs - (-rhs as usize) }
-    else { lhs + rhs as usize }
+fn ptr_add(lhs: usize, rhs: i32) -> usize {
+    if rhs < 0 {
+        lhs - (-rhs as usize)
+    } else {
+        lhs + rhs as usize
+    }
 }
 
-fn ptr_sub(lhs: usize, rhs:i32) -> usize {
-    if rhs < 0 { lhs + (-rhs as usize) }
-    else { lhs - rhs as usize }
+fn ptr_sub(lhs: usize, rhs: i32) -> usize {
+    if rhs < 0 {
+        lhs + (-rhs as usize)
+    } else {
+        lhs - rhs as usize
+    }
 }
 
 impl BinaryOp {
@@ -286,7 +315,7 @@ impl BinaryOp {
                 I32 I32 => I32 : (|l,r| l * r),
                 F32 F32 => F32 : (|l,r| l * r)
             ],
-            BinaryOp::DIV =>implement_for![
+            BinaryOp::DIV => implement_for![
                 I32 I32 => I32 : (|l,r| l / r),
                 F32 F32 => F32 : (|l,r| l / r),
             ],
@@ -310,37 +339,37 @@ impl BinaryOp {
             BinaryOp::NE => apply_using!(lhs != rhs),
             BinaryOp::TEQ => apply_using!(lhs.get_type() == rhs.get_type()),
             BinaryOp::TNE => apply_using!(lhs.get_type() != rhs.get_type()),
-            BinaryOp::LT => apply_using!((|l,r| l < r), I32, F32, Char),
-            BinaryOp::LE => apply_using!((|l,r| l <= r), I32, F32, Char),
-            BinaryOp::GT => apply_using!((|l,r| l > r), I32, F32, Char),
-            BinaryOp::GE => apply_using!((|l,r| l >= r), I32, F32, Char),
+            BinaryOp::LT => apply_using!((|l, r| l < r), I32, F32, Char),
+            BinaryOp::LE => apply_using!((|l, r| l <= r), I32, F32, Char),
+            BinaryOp::GT => apply_using!((|l, r| l > r), I32, F32, Char),
+            BinaryOp::GE => apply_using!((|l, r| l >= r), I32, F32, Char),
         }
     }
 }
 
 // cookie instructions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#[derive(Debug,Clone,Copy,PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Source {
     Immediate(Value),
     Stack(usize),
     Register(RegisterName),
 }
 
-#[derive(Debug,Clone,Copy,PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Destination {
     Stack(usize),
     Register(RegisterName),
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Target {
     UnresolvedSymbol(String),
     LocalSymbol(usize, String),
-    ExternalSymbol(usize, String)
+    ExternalSymbol(usize, String),
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     PUSHR(RegisterName),
     PUSHC(Value),
@@ -373,26 +402,35 @@ fn resolve_symbol(inst: &Instruction, symbols: &SymbolTable) -> Instruction {
     use instruction::Instruction::*;
     use instruction::Target::*;
 
-    let resolver = |l: &str| if let Some(n) = symbols.get(&l.to_string()) { LocalSymbol(*n, l.to_string()) } else { UnresolvedSymbol(l.to_string()) };
+    let resolver = |l: &str| {
+        if let Some(n) = symbols.get(&l.to_string()) {
+            LocalSymbol(*n, l.to_string())
+        } else {
+            UnresolvedSymbol(l.to_string())
+        }
+    };
 
     match inst {
         JUMP(UnresolvedSymbol(l)) => JUMP(resolver(l)),
         BRANCH(val, UnresolvedSymbol(l)) => BRANCH(*val, resolver(l)),
-        _ => inst.clone()
+        _ => inst.clone(),
     }
 }
 
 pub fn resolve_internal_lables(insts: InstructionList, symbols: &SymbolTable) -> InstructionList {
-    insts.iter().map(|i| resolve_symbol(i, symbols)).collect::<InstructionList>()
+    insts
+        .iter()
+        .map(|i| resolve_symbol(i, symbols))
+        .collect::<InstructionList>()
 }
 
 // tests ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use super::UnaryOp::*;
     use super::BinaryOp::*;
+    use super::UnaryOp::*;
+    use super::*;
 
     #[test]
     fn neg_test_1() {
@@ -853,21 +891,21 @@ mod test {
     fn add_test_6() {
         let lhs = Value::Char('c');
         let rhs = Value::I32(4);
-        assert!(ADD.apply_to(lhs,rhs).is_err());
+        assert!(ADD.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn add_test_7() {
         let lhs = Value::I32(3);
         let rhs = Value::Bool(true);
-        assert!(ADD.apply_to(lhs,rhs).is_err());
+        assert!(ADD.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn add_test_8() {
         let lhs = Value::Void;
         let rhs = Value::I32(1);
-        assert!(ADD.apply_to(lhs,rhs).is_err());
+        assert!(ADD.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
@@ -883,7 +921,10 @@ mod test {
         let rhs_val = 2.71828;
         let lhs = Value::F32(lhs_val);
         let rhs = Value::F32(rhs_val);
-        assert_eq!(SUB.apply_to(lhs, rhs).unwrap(), Value::F32(lhs_val - rhs_val));
+        assert_eq!(
+            SUB.apply_to(lhs, rhs).unwrap(),
+            Value::F32(lhs_val - rhs_val)
+        );
     }
 
     #[test]
@@ -911,112 +952,112 @@ mod test {
     fn sub_test_6() {
         let lhs = Value::Char('e');
         let rhs = Value::I32(4);
-        assert!(SUB.apply_to(lhs,rhs).is_err());
+        assert!(SUB.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn sub_test_7() {
         let lhs = Value::I32(3);
         let rhs = Value::Bool(true);
-        assert!(SUB.apply_to(lhs,rhs).is_err());
+        assert!(SUB.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn sub_test_8() {
         let lhs = Value::Void;
         let rhs = Value::I32(1);
-        assert!(SUB.apply_to(lhs,rhs).is_err());
+        assert!(SUB.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn mul_test_1() {
         let lhs = Value::I32(3);
         let rhs = Value::I32(4);
-        assert_eq!(MUL.apply_to(lhs,rhs).unwrap(), Value::I32(12));
+        assert_eq!(MUL.apply_to(lhs, rhs).unwrap(), Value::I32(12));
     }
 
     #[test]
     fn mul_test_2() {
         let lhs = Value::F32(0.2);
         let rhs = Value::F32(10.0);
-        assert_eq!(MUL.apply_to(lhs,rhs).unwrap(), Value::F32(2.0));
+        assert_eq!(MUL.apply_to(lhs, rhs).unwrap(), Value::F32(2.0));
     }
 
     #[test]
     fn mul_test_3() {
         let lhs = Value::F32(2.0);
         let rhs = Value::I32(3);
-        assert!(MUL.apply_to(lhs,rhs).is_err());
+        assert!(MUL.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn mul_test_4() {
         let lhs = Value::Char('e');
         let rhs = Value::I32(1);
-        assert!(MUL.apply_to(lhs,rhs).is_err());
+        assert!(MUL.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn mul_test_5() {
         let lhs = Value::F32(1.0);
         let rhs = Value::Bool(true);
-        assert!(MUL.apply_to(lhs,rhs).is_err());
+        assert!(MUL.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn mul_test_6() {
         let lhs = Value::I32(2);
         let rhs = Value::Void;
-        assert!(MUL.apply_to(lhs,rhs).is_err());
+        assert!(MUL.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn div_test_1() {
         let lhs = Value::I32(6);
         let rhs = Value::I32(3);
-        assert_eq!(DIV.apply_to(lhs,rhs).unwrap(), Value::I32(2));
+        assert_eq!(DIV.apply_to(lhs, rhs).unwrap(), Value::I32(2));
     }
 
     #[test]
     fn div_test_2() {
         let lhs = Value::F32(4.68);
         let rhs = Value::F32(2.0);
-        assert_eq!(DIV.apply_to(lhs,rhs).unwrap(), Value::F32(2.34));
+        assert_eq!(DIV.apply_to(lhs, rhs).unwrap(), Value::F32(2.34));
     }
 
     #[test]
     fn div_test_3() {
         let lhs = Value::F32(2.0);
         let rhs = Value::I32(10);
-        assert!(DIV.apply_to(lhs,rhs).is_err());
+        assert!(DIV.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn div_test_4() {
         let lhs = Value::Char('f');
         let rhs = Value::I32(2);
-        assert!(DIV.apply_to(lhs,rhs).is_err());
+        assert!(DIV.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn div_test_5() {
         let lhs = Value::F32(3.0);
         let rhs = Value::Bool(true);
-        assert!(DIV.apply_to(lhs,rhs).is_err());
+        assert!(DIV.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn div_test_6() {
         let lhs = Value::I32(5);
         let rhs = Value::Void;
-        assert!(DIV.apply_to(lhs,rhs).is_err());
+        assert!(DIV.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn mod_test_1() {
         let lhs = Value::I32(5);
         let rhs = Value::I32(3);
-        assert_eq!(MOD.apply_to(lhs,rhs).unwrap(), Value::I32(2));
+        assert_eq!(MOD.apply_to(lhs, rhs).unwrap(), Value::I32(2));
     }
 
     #[test]
@@ -1025,35 +1066,38 @@ mod test {
         let rhs_val = 1.5;
         let lhs = Value::F32(lhs_val);
         let rhs = Value::F32(rhs_val);
-        assert_eq!(MOD.apply_to(lhs,rhs).unwrap(), Value::F32(lhs_val % rhs_val));
+        assert_eq!(
+            MOD.apply_to(lhs, rhs).unwrap(),
+            Value::F32(lhs_val % rhs_val)
+        );
     }
 
     #[test]
     fn mod_test_3() {
         let lhs = Value::F32(2.0);
         let rhs = Value::I32(10);
-        assert!(MOD.apply_to(lhs,rhs).is_err());
+        assert!(MOD.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn mod_test_4() {
         let lhs = Value::Char('f');
         let rhs = Value::I32(2);
-        assert!(MOD.apply_to(lhs,rhs).is_err());
+        assert!(MOD.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn mod_test_5() {
         let lhs = Value::F32(3.0);
         let rhs = Value::Bool(true);
-        assert!(MOD.apply_to(lhs,rhs).is_err());
+        assert!(MOD.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
     fn mod_test_6() {
         let lhs = Value::I32(5);
         let rhs = Value::Void;
-        assert!(MOD.apply_to(lhs,rhs).is_err());
+        assert!(MOD.apply_to(lhs, rhs).is_err());
     }
 
     #[test]
@@ -1462,7 +1506,6 @@ mod test {
         assert!(LT.apply_to(lhs, rhs).is_err());
     }
 
-
     #[test]
     fn le_test_1() {
         let lhs = Value::I32(3);
@@ -1798,5 +1841,4 @@ mod test {
         let rhs = Value::Void;
         assert!(GE.apply_to(lhs, rhs).is_err());
     }
-
 }
