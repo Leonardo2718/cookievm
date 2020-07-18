@@ -776,7 +776,7 @@ mod test {
     }
 
     #[test]
-    fn parsre_test_3() {
+    fn parser_test_3() {
         let insts = parse(Lexer::new("jump L1 L1: pushc Bool(true)")).unwrap();
         let mut iter = insts.iter();
         assert_eq!(
@@ -788,7 +788,7 @@ mod test {
     }
 
     #[test]
-    fn parse_test_4() {
+    fn parser_test_4() {
         assert!(parse(Lexer::new("foo")).is_err());
     }
 }
