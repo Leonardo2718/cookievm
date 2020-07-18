@@ -383,6 +383,37 @@ mod test {
     }
 
     #[test]
+    fn move_test_1() {
+        let insts = vec![
+            MOVE(Destination::Stack, Source::Immediate(Value::I32(3))),
+        ];
+        let mut thread = Thread::new(insts);
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
+    }
+
+    #[test]
+    fn move_test_2() {
+        let insts = vec![
+            MOVE(Destination::Register(RegisterName::R(5)), Source::Immediate(Value::I32(3))),
+            MOVE(Destination::Stack, Source::Register(RegisterName::R(5))),
+        ];
+        let mut thread = Thread::new(insts);
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::I32(3));
+    }
+
+    #[test]
+    fn move_test_3() {
+        let insts = vec![
+            MOVE(Destination::Register(RegisterName::R(0)), Source::Immediate(Value::I32(3))),
+            MOVE(Destination::Register(RegisterName::R(15)), Source::Register(RegisterName::StackPointer)),
+            BOp(BinaryOp::ADD, Destination::Register(RegisterName::R(3)), Source::Register(RegisterName::R(15)), Source::Register(RegisterName::R(0))),
+            MOVE(Destination::Stack, Source::Register(RegisterName::R(3))),
+        ];
+        let mut thread = Thread::new(insts);
+        assert_eq!(thread.exec().unwrap().unwrap(), Value::SPtr(3));
+    }
+
+    #[test]
     fn jump_test_1() {
         let insts = vec![
             PUSHC(Value::I32(1)),

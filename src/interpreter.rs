@@ -208,6 +208,11 @@ impl Interpreter {
                 self.pop()?;
                 self.pc + 1
             }
+            MOVE(dest, src) => {
+                let val = self.get_value(src)?;
+                self.put_value(dest, val)?;
+                self.pc + 1
+            }
             LOADFROM(dest, src) => {
                 let src_val = self.get_value(src)?;
                 let addr = expect_value!(
@@ -398,10 +403,7 @@ impl Interpreter {
             RegisterName::StackPointer => Ok(Value::SPtr(self.stack.len())),
             RegisterName::FramePointer => Ok(Value::SPtr(self.fp)),
             RegisterName::ProgramCounter => Ok(Value::IPtr(self.pc)),
-            _ => Err(InterpreterError::UseOfUnimplementedFeature(format!(
-                "Unimplemented register access: {}",
-                reg
-            ))),
+            RegisterName::R(x) => Ok(self.gpr[x as usize].clone()),
         }
     }
 
@@ -435,10 +437,10 @@ impl Interpreter {
                 )?;
                 Ok(())
             }
-            _ => Err(InterpreterError::UseOfUnimplementedFeature(format!(
-                "Unimplemented register access {}",
-                reg
-            ))),
+            RegisterName::R(x) => {
+                self.gpr[x as usize] = val;
+                Ok(())
+            }
         }
     }
 

@@ -374,6 +374,7 @@ pub enum Instruction {
     PUSHC(Value),
     POPR(RegisterName),
     POP,
+    MOVE(Destination, Source),
 
     LOADFROM(Destination, Source),
     STORETO(Source, Source),

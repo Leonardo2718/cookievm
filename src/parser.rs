@@ -472,6 +472,10 @@ pub fn parse<'a>(mut lexer: Lexer<'a>) -> Result<InstructionList> {
                 "pop" => {
                     insts.push(POP);
                 }
+                "move" => {
+                    let (dest, src) = parse_ds(&mut lexer)?;
+                    insts.push(MOVE(dest, src));
+                }
                 "jump" => {
                     let l = eat_token!(lexer, Ident)?;
                     insts.push(JUMP(UnresolvedSymbol(l)));
