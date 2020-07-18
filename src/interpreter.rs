@@ -220,7 +220,7 @@ impl Interpreter {
                 self.pc + 1
             }
             STORETO(src, dest) => {
-                let (val, dest_val) = self.get_values(dest, src)?;
+                let (val, dest_val) = self.get2_values(dest, src)?;
                 let addr = expect_value!(
                     dest_val,
                     SPtr,
@@ -236,7 +236,7 @@ impl Interpreter {
                 self.pc + 1
             }
             BOp(op, dest, lhs, rhs) => {
-                let (lhs_v, rhs_v) = self.get_values(lhs, rhs)?;
+                let (lhs_v, rhs_v) = self.get2_values(lhs, rhs)?;
                 let res = op.apply_to(lhs_v, rhs_v)?;
                 self.put_value(dest, res)?;
                 self.pc + 1
@@ -264,7 +264,7 @@ impl Interpreter {
                 }
             }
             DBRANCH(src1, src2) => {
-                let (val1, val2) = self.get_values(src1, src2)?;
+                let (val1, val2) = self.get2_values(src1, src2)?;
                 let condition = expect_value!(
                     val1,
                     Bool,
@@ -352,53 +352,21 @@ impl Interpreter {
         src3: cookie::Source,
     ) -> Result<(cookie::Value, cookie::Value, cookie::Value)> {
         use self::cookie::Source::*;
-        match (src1, src2, src3) {
-            (Register(r1), Register(r2), Register(r3)) => Ok((
-                self.register_get(r1)?,
-                self.register_get(r2)?,
-                self.register_get(r3)?,
-            )),
-            (Register(r1), Register(r2), Immediate(i3)) => {
-                Ok((self.register_get(r1)?, self.register_get(r2)?, i3))
-            }
-            (Register(r1), Immediate(i2), Register(r3)) => {
-                Ok((self.register_get(r1)?, i2, self.register_get(r3)?))
-            }
-            (Register(r1), Immediate(i2), Immediate(i3)) => Ok((self.register_get(r1)?, i2, i3)),
-            (Immediate(i1), Register(r2), Register(r3)) => {
-                Ok((i1, self.register_get(r2)?, self.register_get(r3)?))
-            }
-            (Immediate(i1), Register(r2), Immediate(i3)) => Ok((i1, self.register_get(r2)?, i3)),
-            (Immediate(i1), Immediate(i2), Register(r3)) => Ok((i1, i2, self.register_get(r3)?)),
-            (Immediate(i1), Immediate(i2), Immediate(i3)) => Ok((i1, i2, i3)),
-            (Stack, Stack, Stack) => {
-                let v2 = self.pop()?;
-                let v1 = self.pop()?;
-                let v0 = self.pop()?;
-                Ok((v0, v1, v2))
-            }
-            (s0, s1, s2) => Err(InterpreterError::Bad3SourceCombination(s0, s1, s2)),
-        }
+        let v3 = self.get_value(src3)?;
+        let v2 = self.get_value(src2)?;
+        let v1 = self.get_value(src1)?;
+        Ok((v1, v2, v3))
     }
 
-    fn get_values(
+    fn get2_values(
         &mut self,
         srcl: cookie::Source,
         srcr: cookie::Source,
     ) -> Result<(cookie::Value, cookie::Value)> {
         use self::cookie::Source::*;
-        match (srcl, srcr) {
-            (Register(l), Register(r)) => Ok((self.register_get(l)?, self.register_get(r)?)),
-            (Register(l), Immediate(r)) => Ok((self.register_get(l)?, r)),
-            (Immediate(l), Immediate(r)) => Ok((l, r)),
-            (Immediate(l), Register(r)) => Ok((l, self.register_get(r)?)),
-            (Stack, Stack) => {
-                let r = self.pop()?;
-                let l = self.pop()?;
-                Ok((l, r))
-            }
-            (l, r) => Err(InterpreterError::BadSourceCombination(l, r)),
-        }
+        let r = self.get_value(srcr)?;
+        let l = self.get_value(srcl)?;
+        Ok((l, r))
     }
 
     fn get_value(&mut self, src: cookie::Source) -> Result<cookie::Value> {
