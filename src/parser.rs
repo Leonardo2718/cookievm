@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2018, 2019 Leonardo Banderali
+Copyright (C) 2018, 2020 Leonardo Banderali
 
 License:
 
@@ -199,6 +199,7 @@ fn parse_source<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
         .clone()
         .transpose()?
         .ok_or(ParserError::ExpectingMoreTokens)?;
+
     match t.token {
         Token::Void => Ok(Source::Immediate(Value::Void)),
         Token::Ident(id) => match id.to_lowercase().as_ref() {
@@ -214,7 +215,7 @@ fn parse_source<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
         Token::FP => parse_as_register!(RegisterName::FramePointer),
         Token::PC => parse_as_register!(RegisterName::ProgramCounter),
         Token::R(i) => parse_as_register!(RegisterName::R(i)),
-        Token::StackPos(p) => Ok(Source::Stack(p)),
+        Token::StackPos => Ok(Source::Stack),
         _ => return unexpected_token!(t),
     }
 }
@@ -234,7 +235,7 @@ fn parse_destination<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Destination> {
         Token::FP => parse_as_register!(RegisterName::FramePointer),
         Token::PC => parse_as_register!(RegisterName::ProgramCounter),
         Token::R(i) => parse_as_register!(RegisterName::R(i)),
-        Token::StackPos(p) => Ok(Destination::Stack(p)),
+        Token::StackPos => Ok(Destination::Stack),
         _ => return unexpected_token!(t),
     }
 }
@@ -266,11 +267,11 @@ fn parse_s<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Source> {
     match peeked.clone()?.token {
         Token::ExclamationMark => {
             lexer.next();
-            Ok(Source::Stack(0))
+            Ok(Source::Stack)
         }
         Token::QuestionMark => {
             lexer.next();
-            Ok(Source::Stack(0))
+            Ok(Source::Stack)
         }
         _ => {
             let src = parse_source(lexer)?;
@@ -285,11 +286,11 @@ fn parse_d<'a>(lexer: &mut Lexer<'a>) -> Result<'a, Destination> {
     match peeked.clone()?.token {
         Token::ExclamationMark => {
             lexer.next();
-            Ok(Destination::Stack(0))
+            Ok(Destination::Stack)
         }
         Token::QuestionMark => {
             lexer.next();
-            Ok(Destination::Stack(0))
+            Ok(Destination::Stack)
         }
         _ => {
             let dest = parse_destination(lexer)?;
@@ -304,11 +305,11 @@ fn parse_ss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Source, Source)> {
     match peeked.clone()?.token {
         Token::ExclamationMark => {
             lexer.next();
-            Ok((Source::Stack(1), Source::Stack(0)))
+            Ok((Source::Stack, Source::Stack))
         }
         Token::QuestionMark => {
             lexer.next();
-            Ok((Source::Stack(0), Source::Stack(1)))
+            Ok((Source::Stack, Source::Stack))
         }
         _ => {
             let src1 = parse_source(lexer)?;
@@ -324,11 +325,11 @@ fn parse_sss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Source, Source, Source)> 
     match peeked.clone()?.token {
         Token::ExclamationMark => {
             lexer.next();
-            Ok((Source::Stack(2), Source::Stack(1), Source::Stack(0)))
+            Ok((Source::Stack, Source::Stack, Source::Stack))
         }
         Token::QuestionMark => {
             lexer.next();
-            Ok((Source::Stack(0), Source::Stack(1), Source::Stack(2)))
+            Ok((Source::Stack, Source::Stack, Source::Stack))
         }
         _ => {
             let src1 = parse_source(lexer)?;
@@ -345,11 +346,11 @@ fn parse_ds<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source)> {
     match peeked.clone()?.token {
         Token::ExclamationMark => {
             lexer.next();
-            Ok((Destination::Stack(0), Source::Stack(0)))
+            Ok((Destination::Stack, Source::Stack))
         }
         Token::QuestionMark => {
             lexer.next();
-            Ok((Destination::Stack(0), Source::Stack(0)))
+            Ok((Destination::Stack, Source::Stack))
         }
         _ => {
             let dest = parse_destination(lexer)?;
@@ -365,11 +366,11 @@ fn parse_dss<'a>(lexer: &mut Lexer<'a>) -> Result<'a, (Destination, Source, Sour
     match peeked.clone()?.token {
         Token::ExclamationMark => {
             lexer.next();
-            Ok((Destination::Stack(0), Source::Stack(1), Source::Stack(0)))
+            Ok((Destination::Stack, Source::Stack, Source::Stack))
         }
         Token::QuestionMark => {
             lexer.next();
-            Ok((Destination::Stack(0), Source::Stack(0), Source::Stack(1)))
+            Ok((Destination::Stack, Source::Stack, Source::Stack))
         }
         _ => {
             let dest = parse_destination(lexer)?;
@@ -501,30 +502,30 @@ mod test {
 
     #[test]
     fn parse_dss_test_1() {
-        let insts = parse(Lexer::new("Add @0 @1 @0")).unwrap();
+        let insts = parse(Lexer::new("Add @ @ @")).unwrap();
         assert_eq!(insts.len(), 1);
         assert_eq!(
             insts[0],
             Instruction::BOp(
                 BinaryOp::ADD,
-                Destination::Stack(0),
-                Source::Stack(1),
-                Source::Stack(0)
+                Destination::Stack,
+                Source::Stack,
+                Source::Stack
             )
         );
     }
 
     #[test]
     fn parse_dss_test_2() {
-        let insts = parse(Lexer::new("EQ @0 @1 @0")).unwrap();
+        let insts = parse(Lexer::new("EQ @ @ @")).unwrap();
         assert_eq!(insts.len(), 1);
         assert_eq!(
             insts[0],
             Instruction::BOp(
                 BinaryOp::EQ,
-                Destination::Stack(0),
-                Source::Stack(1),
-                Source::Stack(0)
+                Destination::Stack,
+                Source::Stack,
+                Source::Stack
             )
         );
     }
@@ -537,9 +538,9 @@ mod test {
             insts[0],
             Instruction::BOp(
                 BinaryOp::SUB,
-                Destination::Stack(0),
-                Source::Stack(1),
-                Source::Stack(0)
+                Destination::Stack,
+                Source::Stack,
+                Source::Stack
             )
         );
     }
@@ -552,34 +553,30 @@ mod test {
             insts[0],
             Instruction::BOp(
                 BinaryOp::MUL,
-                Destination::Stack(0),
-                Source::Stack(0),
-                Source::Stack(1)
+                Destination::Stack,
+                Source::Stack,
+                Source::Stack
             )
         );
     }
 
     #[test]
     fn parse_ds_test_1() {
-        let insts = parse(Lexer::new("NOT @0 @0")).unwrap();
+        let insts = parse(Lexer::new("NOT @ @")).unwrap();
         assert_eq!(insts.len(), 1);
         assert_eq!(
             insts[0],
-            Instruction::UOp(UnaryOp::NOT, Destination::Stack(0), Source::Stack(0))
+            Instruction::UOp(UnaryOp::NOT, Destination::Stack, Source::Stack)
         );
     }
 
     #[test]
     fn parse_ds_test_2() {
-        let insts = parse(Lexer::new("CVT F32 @0 @0")).unwrap();
+        let insts = parse(Lexer::new("CVT F32 @ @")).unwrap();
         assert_eq!(insts.len(), 1);
         assert_eq!(
             insts[0],
-            Instruction::UOp(
-                UnaryOp::CVT(Type::F32),
-                Destination::Stack(0),
-                Source::Stack(0)
-            )
+            Instruction::UOp(UnaryOp::CVT(Type::F32), Destination::Stack, Source::Stack)
         );
     }
 
@@ -589,7 +586,7 @@ mod test {
         assert_eq!(insts.len(), 1);
         assert_eq!(
             insts[0],
-            Instruction::LOADFROM(Destination::Stack(0), Source::Stack(0))
+            Instruction::LOADFROM(Destination::Stack, Source::Stack)
         );
     }
 
@@ -599,42 +596,29 @@ mod test {
         assert_eq!(insts.len(), 1);
         assert_eq!(
             insts[0],
-            Instruction::UOp(
-                UnaryOp::CVT(Type::F32),
-                Destination::Stack(0),
-                Source::Stack(0)
-            )
+            Instruction::UOp(UnaryOp::CVT(Type::F32), Destination::Stack, Source::Stack)
         );
     }
 
     #[test]
     fn parse_ss_test_1() {
-        let insts = parse(Lexer::new("StoreTo @1 @0")).unwrap();
+        let insts = parse(Lexer::new("StoreTo @ @")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(
-            insts[0],
-            Instruction::STORETO(Source::Stack(1), Source::Stack(0))
-        )
+        assert_eq!(insts[0], Instruction::STORETO(Source::Stack, Source::Stack))
     }
 
     #[test]
     fn parse_ss_test_2() {
         let insts = parse(Lexer::new("StoreTo !")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(
-            insts[0],
-            Instruction::STORETO(Source::Stack(1), Source::Stack(0))
-        )
+        assert_eq!(insts[0], Instruction::STORETO(Source::Stack, Source::Stack))
     }
 
     #[test]
     fn parse_ss_test_3() {
         let insts = parse(Lexer::new("StoreTo ?")).unwrap();
         assert_eq!(insts.len(), 1);
-        assert_eq!(
-            insts[0],
-            Instruction::STORETO(Source::Stack(0), Source::Stack(1))
-        )
+        assert_eq!(insts[0], Instruction::STORETO(Source::Stack, Source::Stack))
     }
 
     #[test]
@@ -771,7 +755,7 @@ mod test {
 
     #[test]
     fn parser_test_2() {
-        let insts = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) add @0 @1 @0")).unwrap();
+        let insts = parse(Lexer::new("pushc F32(3.1) pushc F32(4.2) add @ @ @")).unwrap();
         let mut iter = insts.iter();
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(3.1)));
         assert_eq!(*iter.next().unwrap(), PUSHC(Value::F32(4.2)));
@@ -779,9 +763,9 @@ mod test {
             *iter.next().unwrap(),
             BOp(
                 BinaryOp::ADD,
-                Destination::Stack(0),
-                Source::Stack(1),
-                Source::Stack(0)
+                Destination::Stack,
+                Source::Stack,
+                Source::Stack
             )
         );
         assert!(iter.next().is_none());

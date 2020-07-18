@@ -121,7 +121,7 @@ pub enum Token {
     Address(usize),
     Char(char),
     Bool(bool),
-    StackPos(usize),
+    StackPos,
     Void,
     SP,
     FP,
@@ -344,16 +344,6 @@ impl<'a> Lexer<'a> {
         self.emit(Token::Char(c))
     }
 
-    fn match_stack_pos(&mut self) -> Result<'a> {
-        let mut s = String::new();
-        eat_while!(self, |c: char| c.is_digit(10), |c: char| s.push(c));
-        let pos = s.clone().parse::<usize>().map_err(|e| Error {
-            err: LexerError::ParseIntError(e),
-            pos: self.token_pos,
-        })?;
-        self.emit(Token::StackPos(pos))
-    }
-
     fn match_reg(&mut self) -> Result<'a> {
         let mut s = String::new();
         match self.peek_char() {
@@ -490,7 +480,7 @@ impl<'a> Iterator for Lexer<'a> {
                 Some('@') => {
                     // an @ indicates the start of a stack position
                     lexer_try!(self.move_and_set_pos());
-                    return Some(self.match_stack_pos());
+                    return Some(self.emit(Token::StackPos));
                 }
                 Some('$') => {
                     // a $ indicates the start of a register name, so the next characters must either

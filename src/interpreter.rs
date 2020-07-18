@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2018, 2019 Leonardo Banderali
+Copyright (C) 2018, 2020 Leonardo Banderali
 
 License:
 
@@ -220,7 +220,7 @@ impl Interpreter {
                 self.pc + 1
             }
             STORETO(src, dest) => {
-                let (dest_val, val) = self.get_values(dest, src)?;
+                let (val, dest_val) = self.get_values(dest, src)?;
                 let addr = expect_value!(
                     dest_val,
                     SPtr,
@@ -371,16 +371,10 @@ impl Interpreter {
             (Immediate(i1), Register(r2), Immediate(i3)) => Ok((i1, self.register_get(r2)?, i3)),
             (Immediate(i1), Immediate(i2), Register(r3)) => Ok((i1, i2, self.register_get(r3)?)),
             (Immediate(i1), Immediate(i2), Immediate(i3)) => Ok((i1, i2, i3)),
-            (Stack(2), Stack(1), Stack(0)) => {
+            (Stack, Stack, Stack) => {
                 let v2 = self.pop()?;
                 let v1 = self.pop()?;
                 let v0 = self.pop()?;
-                Ok((v0, v1, v2))
-            }
-            (Stack(0), Stack(1), Stack(2)) => {
-                let v0 = self.pop()?;
-                let v1 = self.pop()?;
-                let v2 = self.pop()?;
                 Ok((v0, v1, v2))
             }
             (s0, s1, s2) => Err(InterpreterError::Bad3SourceCombination(s0, s1, s2)),
@@ -398,14 +392,9 @@ impl Interpreter {
             (Register(l), Immediate(r)) => Ok((self.register_get(l)?, r)),
             (Immediate(l), Immediate(r)) => Ok((l, r)),
             (Immediate(l), Register(r)) => Ok((l, self.register_get(r)?)),
-            (Stack(1), Stack(0)) => {
+            (Stack, Stack) => {
                 let r = self.pop()?;
                 let l = self.pop()?;
-                Ok((l, r))
-            }
-            (Stack(0), Stack(1)) => {
-                let l = self.pop()?;
-                let r = self.pop()?;
                 Ok((l, r))
             }
             (l, r) => Err(InterpreterError::BadSourceCombination(l, r)),
@@ -417,7 +406,7 @@ impl Interpreter {
         match src {
             Register(r) => self.register_get(r),
             Immediate(v) => Ok(v),
-            Stack(0) => self.pop(),
+            Stack => self.pop(),
             _ => Err(InterpreterError::BadSource(src)),
         }
     }
@@ -426,7 +415,7 @@ impl Interpreter {
         use self::cookie::Destination::*;
         match dest {
             Register(r) => self.register_put(r, val),
-            Stack(0) => {
+            Stack => {
                 self.stack.push(val);
                 Ok(())
             }

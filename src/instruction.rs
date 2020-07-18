@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2018, 2019 Leonardo Banderali
+Copyright (C) 2018, 2020 Leonardo Banderali
 
 License:
 
@@ -42,7 +42,6 @@ macro_rules! define_types {
             $( pub type $n = $t );+;
             pub type Void = ();
         }
-        
         #[derive(Debug,Clone,Copy,PartialEq)]
         pub enum Value { $($n($t)),+ , Void }
 
@@ -352,14 +351,14 @@ impl BinaryOp {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Source {
     Immediate(Value),
-    Stack(usize),
     Register(RegisterName),
+    Stack,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Destination {
-    Stack(usize),
     Register(RegisterName),
+    Stack,
 }
 
 #[derive(Debug, Clone, PartialEq)]
