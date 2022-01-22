@@ -39,6 +39,7 @@ pub enum InterpreterError {
     AttemptedLoadFromNonSPtr(cookie::Value),
     AttemptedJumpToNonIPtr(cookie::Value),
     TypeMismatchError(cookie::Type, cookie::Value),
+    UseOfNullPtr,
     BadInputType(cookie::Type),
     BadSource(cookie::Source),
     BadSourceCombination(cookie::Source, cookie::Source),
@@ -71,6 +72,7 @@ impl error::Error for InterpreterError {
             }
             &AttemptedJumpToNonIPtr(_) => "Attempted to jump to non-IPtr (non instruction address)",
             &TypeMismatchError(_, _) => "Got value of unexpected type",
+            &UseOfNullPtr => "Attempted to dereference a null pointer",
             &BadInputType(_) => "Cannot read input of given type",
             &BadSource(_) => "Specified source operand is invalid",
             &BadSourceCombination(_, _) => "Specified source operands are invalid",
@@ -167,6 +169,14 @@ macro_rules! expect_value {
     };
 }
 
+macro_rules! null_check {
+    ($val:expr) => {
+        if $val == 0 {
+            return Err(InterpreterError::UseOfNullPtr);
+        }
+    };
+}
+
 impl Interpreter {
     pub fn new(instructions: cookie::InstructionList) -> Interpreter {
         Interpreter {
@@ -220,6 +230,7 @@ impl Interpreter {
                     SPtr,
                     InterpreterError::AttemptedLoadFromNonSPtr(src_val)
                 )?;
+                null_check!(addr);
                 let val = self.stack[addr - 1];
                 self.put_value(dest, val)?;
                 self.pc + 1
@@ -231,6 +242,7 @@ impl Interpreter {
                     SPtr,
                     InterpreterError::AttemptedLoadFromNonSPtr(dest_val)
                 )?;
+                null_check!(addr);
                 self.stack[addr - 1] = val;
                 self.pc + 1
             }
